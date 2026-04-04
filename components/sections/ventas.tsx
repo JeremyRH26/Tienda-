@@ -62,6 +62,10 @@ export function Ventas() {
   const [editingSale, setEditingSale] = useState<SaleRecord | null>(null)
   const [editSaleCustomer, setEditSaleCustomer] = useState("")
   const [editSalePayment, setEditSalePayment] = useState<string>("efectivo")
+  const [editSaleItems, setEditSaleItems] = useState<
+    { name: string; quantity: number; price: number }[]
+  >([])
+  const [catalogPickerKey, setCatalogPickerKey] = useState(0)
 
   const filteredProducts = mockProducts.filter(
     (product) =>
@@ -524,6 +528,7 @@ export function Ventas() {
                             setEditingSale(sale)
                             setEditSaleCustomer(sale.customer)
                             setEditSalePayment(sale.paymentMethod)
+                            setEditSaleItems(sale.items.map((i) => ({ ...i })))
                           }}
                         >
                           <Pencil className="h-4 w-4" />
@@ -665,18 +670,22 @@ export function Ventas() {
       <Dialog
         open={editingSale !== null}
         onOpenChange={(open) => {
-          if (!open) setEditingSale(null)
+          if (!open) {
+            setEditingSale(null)
+            setEditSaleItems([])
+          }
         }}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[90vh] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="shrink-0 border-b px-6 py-4">
             <DialogTitle>Editar venta</DialogTitle>
             <DialogDescription>
-              Actualiza el cliente y el método de pago registrados en esta venta.
+              Modifica productos, cantidades, precios, cliente y método de pago. El total se recalcula
+              automáticamente.
             </DialogDescription>
           </DialogHeader>
           {editingSale && (
-            <div className="grid gap-4 py-4">
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-6 py-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Cliente</label>
                 <Input
@@ -698,10 +707,171 @@ export function Ventas() {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <label className="text-sm font-medium">Productos</label>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() =>
+                        setEditSaleItems((prev) => [
+                          ...prev,
+                          { name: "", quantity: 1, price: 0 },
+                        ])
+                      }
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Línea vacía
+                    </Button>
+                    <Select
+                      key={catalogPickerKey}
+                      onValueChange={(productId) => {
+                        const p = mockProducts.find((x) => x.id.toString() === productId)
+                        if (p) {
+                          setEditSaleItems((prev) => [
+                            ...prev,
+                            { name: p.name, quantity: 1, price: p.salePrice },
+                          ])
+                          setCatalogPickerKey((k) => k + 1)
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-[200px] text-xs sm:h-9 sm:text-sm">
+                        <SelectValue placeholder="Del catálogo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {mockProducts.map((p) => (
+                          <SelectItem key={p.id} value={p.id.toString()}>
+                            {p.name} — {formatQ(p.salePrice)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {editSaleItems.map((line, idx) => {
+                    const sub = (line.quantity || 0) * (line.price || 0)
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded-lg border bg-card p-3 shadow-sm"
+                      >
+                        <div className="mb-2 grid gap-2 sm:grid-cols-[1fr_88px_100px_auto] sm:items-end">
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Producto</span>
+                            <Input
+                              value={line.name}
+                              onChange={(e) =>
+                                setEditSaleItems((prev) =>
+                                  prev.map((row, i) =>
+                                    i === idx ? { ...row, name: e.target.value } : row
+                                  )
+                                )
+                              }
+                              placeholder="Nombre"
+                              className="h-10"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">Cant.</span>
+                            <Input
+                              type="number"
+                              min={1}
+                              value={line.quantity || ""}
+                              onChange={(e) => {
+                                const v = parseInt(e.target.value, 10)
+                                setEditSaleItems((prev) =>
+                                  prev.map((row, i) =>
+                                    i === idx
+                                      ? { ...row, quantity: Number.isFinite(v) ? Math.max(0, v) : 0 }
+                                      : row
+                                  )
+                                )
+                              }}
+                              className="h-10"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-xs text-muted-foreground">P. unit.</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={line.price || ""}
+                              onChange={(e) => {
+                                const v = parseFloat(e.target.value)
+                                setEditSaleItems((prev) =>
+                                  prev.map((row, i) =>
+                                    i === idx
+                                      ? { ...row, price: Number.isFinite(v) ? Math.max(0, v) : 0 }
+                                      : row
+                                  )
+                                )
+                              }}
+                              className="h-10"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0 text-destructive hover:text-destructive"
+                            aria-label="Quitar línea"
+                            onClick={() =>
+                              setEditSaleItems((prev) => prev.filter((_, i) => i !== idx))
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="text-right text-sm text-muted-foreground">
+                          Subtotal: <span className="font-semibold text-foreground">{formatQ(sub)}</span>
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {editSaleItems.length === 0 && (
+                  <p className="rounded-md border border-dashed p-3 text-center text-sm text-muted-foreground">
+                    Agrega al menos un producto con el catálogo o una línea vacía.
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between rounded-lg bg-primary/10 px-4 py-3">
+                  <span className="font-medium">Total venta</span>
+                  <span className="text-lg font-bold text-primary">
+                    {formatQ(
+                      editSaleItems.reduce(
+                        (acc, row) => acc + (row.quantity || 0) * (row.price || 0),
+                        0
+                      )
+                    )}
+                  </span>
+                </div>
+              </div>
+
               <Button
-                className="h-11 w-full"
+                className="h-11 w-full shrink-0"
+                disabled={
+                  !editSaleItems.some((row) => row.name.trim() && row.quantity > 0)
+                }
                 onClick={() => {
                   const id = editingSale.id
+                  const items = editSaleItems
+                    .filter((row) => row.name.trim() && row.quantity > 0)
+                    .map((row) => ({
+                      name: row.name.trim(),
+                      quantity: Math.max(1, Math.floor(row.quantity)),
+                      price: row.price,
+                    }))
+                  const newTotal = items.reduce((a, row) => a + row.price * row.quantity, 0)
                   setSalesHistory((prev) =>
                     prev.map((s) =>
                       s.id === id
@@ -709,11 +879,25 @@ export function Ventas() {
                             ...s,
                             customer: editSaleCustomer.trim() || s.customer,
                             paymentMethod: editSalePayment as SaleRecord["paymentMethod"],
+                            items,
+                            total: newTotal,
                           }
                         : s
                     )
                   )
+                  setSelectedSale((cur) =>
+                    cur?.id === id
+                      ? {
+                          ...cur,
+                          customer: editSaleCustomer.trim() || cur.customer,
+                          paymentMethod: editSalePayment as SaleRecord["paymentMethod"],
+                          items,
+                          total: newTotal,
+                        }
+                      : cur
+                  )
                   setEditingSale(null)
+                  setEditSaleItems([])
                 }}
               >
                 Guardar cambios

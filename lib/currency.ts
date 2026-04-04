@@ -10,10 +10,19 @@ export function formatQ(amount: number): string {
   return gtq.format(amount)
 }
 
-/** Eje de gráficos: miles de Q */
+/** Eje de gráficos: valores compactos en quetzales (Q) */
 export function formatQChartTick(value: number): string {
-  if (value >= 1000) return `Q${(value / 1000).toFixed(0)}k`
-  return formatQ(value)
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ""
+  const abs = Math.abs(n)
+  const sign = n < 0 ? "-" : ""
+  if (abs >= 1_000_000) {
+    const m = abs / 1_000_000
+    const s = m >= 10 ? m.toFixed(0) : m.toFixed(1).replace(/\.0$/, "")
+    return `${sign}Q${s}M`
+  }
+  if (abs >= 1000) return `${sign}Q${Math.round(abs / 1000)}k`
+  return formatQ(n)
 }
 
 export function isSameCalendarDay(date: Date, reference: Date = new Date()): boolean {

@@ -149,4 +149,13 @@ export const mockMonthlySales = [
   { month: "Jun", sales: 168000, expenses: 59000 },
 ]
 
+/** Ventas y gastos por año (control anual) */
+export const mockYearlySales = [
+  { year: "2021", sales: 1420000, expenses: 520000 },
+  { year: "2022", sales: 1580000, expenses: 580000 },
+  { year: "2023", sales: 1710000, expenses: 610000 },
+  { year: "2024", sales: 1850000, expenses: 655000 },
+  { year: "2025", sales: 1920000, expenses: 680000 },
+]
+
 export const categories = ["Bebidas", "Panadería", "Lácteos", "Limpieza", "Básicos", "Snacks"]

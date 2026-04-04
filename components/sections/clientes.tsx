@@ -8,7 +8,6 @@ import {
   Search,
   Plus,
   Users,
-  DollarSign,
   Phone,
   Mail,
   ShoppingBag,
@@ -37,6 +36,17 @@ import {
 } from "@/components/ui/alert-dialog"
 
 type Customer = typeof mockCustomers[0]
+
+function IconoQuetzal({ className }: { className?: string }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center font-bold leading-none ${className ?? ""}`}
+      aria-hidden
+    >
+      Q
+    </span>
+  )
+}
 
 export function Clientes() {
   const [customers, setCustomers] = useState<Customer[]>(() =>
@@ -203,11 +213,13 @@ export function Clientes() {
         </Card>
         <Card className="shadow-sm">
           <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-destructive/10 sm:h-12 sm:w-12">
-              <DollarSign className="h-5 w-5 text-destructive sm:h-6 sm:w-6" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 border-destructive/40 bg-destructive/10 sm:h-12 sm:w-12">
+              <IconoQuetzal className="text-base text-destructive sm:text-xl" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Total por Cobrar</p>
+              <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                Total por cobrar (quetzales)
+              </p>
               <p className="text-lg font-bold text-destructive sm:text-2xl">
                 {formatQ(totalDebt)}
               </p>
@@ -322,15 +334,15 @@ export function Clientes() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="gap-1"
+                    className="gap-1.5"
                     onClick={(e) => {
                       e.stopPropagation()
                       setSelectedCustomer(customer)
                       setShowPayment(true)
                     }}
                   >
-                    <DollarSign className="h-3 w-3" />
-                    Registrar Abono
+                    <IconoQuetzal className="text-xs text-foreground" />
+                    Registrar abono
                   </Button>
                 )}
               </div>
@@ -408,8 +420,8 @@ export function Clientes() {
                   className="h-12 w-full gap-2"
                   onClick={() => setShowPayment(true)}
                 >
-                  <DollarSign className="h-4 w-4" />
-                  Registrar Abono
+                  <IconoQuetzal className="text-sm text-primary-foreground" />
+                  Registrar abono
                 </Button>
               )}
             </div>

@@ -123,7 +123,7 @@ export function Dashboard() {
                     axisLine={false}
                     tickLine={false}
                     tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    tickFormatter={(value) => `$${value / 1000}k`}
+                    tickFormatter={(value) => formatQChartTick(Number(value))}
                   />
                   <Tooltip
                     contentStyle={{
