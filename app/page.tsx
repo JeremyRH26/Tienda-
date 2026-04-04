@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { BusinessProvider } from "@/lib/business-context"
 import { AppSidebar } from "@/components/app-sidebar"
 import { Dashboard } from "@/components/sections/dashboard"
 import { Ventas } from "@/components/sections/ventas"
@@ -45,6 +46,7 @@ export default function Home() {
   }
 
   return (
+    <BusinessProvider>
     <div className="flex h-screen bg-background">
       {/* Desktop Sidebar */}
       <div className="hidden md:block">
@@ -83,5 +85,6 @@ export default function Home() {
         <div className="p-4 md:p-6 lg:p-8">{renderSection()}</div>
       </main>
     </div>
+    </BusinessProvider>
   )
 }

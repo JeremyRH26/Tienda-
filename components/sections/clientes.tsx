@@ -13,9 +13,11 @@ import {
   ShoppingBag,
   Pencil,
   Trash2,
+  ScrollText,
 } from "lucide-react"
-import { mockCustomers } from "@/lib/mock-data"
+import { mockCustomers, type ShopCustomer, type PendingCreditLine } from "@/lib/mock-data"
 import { formatQ } from "@/lib/currency"
+import { useBusiness } from "@/lib/business-context"
 import {
   Dialog,
   DialogContent,
@@ -35,7 +37,22 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-type Customer = typeof mockCustomers[0]
+type Customer = ShopCustomer
+
+function applyAbonoToCreditLines(
+  lines: PendingCreditLine[],
+  amount: number
+): PendingCreditLine[] {
+  let remaining = amount
+  const next = lines.map((line) => ({ ...line }))
+  for (const line of next) {
+    if (remaining <= 0) break
+    const pay = Math.min(line.saldoPendiente, remaining)
+    line.saldoPendiente = Math.round((line.saldoPendiente - pay) * 100) / 100
+    remaining -= pay
+  }
+  return next.filter((l) => l.saldoPendiente > 0.009)
+}
 
 function IconoQuetzal({ className }: { className?: string }) {
   return (
@@ -49,8 +66,12 @@ function IconoQuetzal({ className }: { className?: string }) {
 }
 
 export function Clientes() {
+  const { registerAbono } = useBusiness()
   const [customers, setCustomers] = useState<Customer[]>(() =>
-    mockCustomers.map((c) => ({ ...c }))
+    mockCustomers.map((c) => ({
+      ...c,
+      pendingCreditLines: c.pendingCreditLines.map((l) => ({ ...l })),
+    }))
   )
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddCustomer, setShowAddCustomer] = useState(false)
@@ -89,6 +110,7 @@ export function Clientes() {
         balance: 0,
         lastPurchase: "-",
         totalPurchases: 0,
+        pendingCreditLines: [],
       },
     ])
     setShowAddCustomer(false)
@@ -111,6 +133,7 @@ export function Clientes() {
               name: editForm.name.trim() || c.name,
               phone: editForm.phone.trim() || c.phone,
               email: editForm.email.trim() || c.email,
+              pendingCreditLines: c.pendingCreditLines.map((l) => ({ ...l })),
             }
           : c
       )
@@ -129,7 +152,40 @@ export function Clientes() {
   }
 
   const handlePayment = () => {
-    // In a real app, this would process the payment
+    if (!selectedCustomer) return
+    const raw = paymentAmount.replace(",", ".").trim()
+    const amount = parseFloat(raw)
+    if (!Number.isFinite(amount) || amount <= 0) return
+
+    const id = selectedCustomer.id
+    const applied = Math.min(amount, selectedCustomer.balance)
+    if (applied <= 0) return
+
+    const hasLines = selectedCustomer.pendingCreditLines.length > 0
+    const newLines = hasLines
+      ? applyAbonoToCreditLines(selectedCustomer.pendingCreditLines, applied)
+      : []
+    const newBalance = hasLines
+      ? newLines.reduce((acc, l) => acc + l.saldoPendiente, 0)
+      : Math.max(0, selectedCustomer.balance - applied)
+
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c
+        return {
+          ...c,
+          pendingCreditLines: hasLines ? newLines : c.pendingCreditLines,
+          balance: newBalance,
+        }
+      })
+    )
+
+    registerAbono({
+      customerId: id,
+      customerName: selectedCustomer.name,
+      amount: applied,
+    })
+
     setShowPayment(false)
     setPaymentAmount("")
     setSelectedCustomer(null)
@@ -304,6 +360,12 @@ export function Clientes() {
                 {customer.balance > 0 && (
                   <span className="rounded-full bg-destructive/10 px-2 py-1 text-xs font-semibold text-destructive">
                     Debe
+                    {customer.pendingCreditLines.length > 0 && (
+                      <span className="ml-1 font-normal opacity-90">
+                        ({customer.pendingCreditLines.length} fiado
+                        {customer.pendingCreditLines.length > 1 ? "s" : ""})
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
@@ -414,6 +476,44 @@ export function Clientes() {
                   </div>
                 </div>
               </div>
+
+              {selectedCustomer.balance > 0 && selectedCustomer.pendingCreditLines.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="flex items-center gap-2 font-semibold">
+                    <ScrollText className="h-4 w-4 text-muted-foreground" />
+                    Historial de fiados pendientes
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Desglose de ventas registradas al fiado que aún tienen saldo por cobrar.
+                  </p>
+                  <div className="max-h-52 overflow-y-auto rounded-lg border">
+                    <table className="w-full text-xs sm:text-sm">
+                      <thead className="sticky top-0 bg-muted/80 backdrop-blur">
+                        <tr className="border-b text-left">
+                          <th className="p-2 font-medium">Fecha</th>
+                          <th className="p-2 font-medium">Concepto</th>
+                          <th className="p-2 text-right font-medium">Original</th>
+                          <th className="p-2 text-right font-medium">Pendiente</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedCustomer.pendingCreditLines.map((line) => (
+                          <tr key={line.id} className="border-b last:border-0">
+                            <td className="p-2 text-muted-foreground">{line.fecha}</td>
+                            <td className="p-2">{line.descripcion}</td>
+                            <td className="p-2 text-right tabular-nums">
+                              {formatQ(line.totalOriginal)}
+                            </td>
+                            <td className="p-2 text-right font-medium tabular-nums text-destructive">
+                              {formatQ(line.saldoPendiente)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {selectedCustomer.balance > 0 && (
                 <Button

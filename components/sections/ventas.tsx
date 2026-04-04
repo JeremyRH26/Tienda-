@@ -4,9 +4,12 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Plus, Minus, Trash2, CreditCard, Banknote, User, ShoppingCart, Receipt, Clock, Eye, Pencil, CalendarDays, List } from "lucide-react"
+import { Search, Plus, Minus, Trash2, CreditCard, Banknote, User, ShoppingCart, Receipt, Clock, Eye, Pencil, CalendarDays, List, Printer, Landmark } from "lucide-react"
 import { mockProducts, mockCustomers, mockSalesHistoryExtended, type SaleRecord } from "@/lib/mock-data"
 import { formatQ, isSameCalendarDay } from "@/lib/currency"
+import { useBusiness } from "@/lib/business-context"
+import { filterSalesByPeriod, type SalesPrintPeriod } from "@/lib/sales-period"
+import { printSalesList, printSaleReceipt } from "@/lib/print"
 import {
   Dialog,
   DialogContent,
@@ -46,6 +49,7 @@ interface CartItem {
 }
 
 export function Ventas() {
+  const { abonos } = useBusiness()
   const [searchTerm, setSearchTerm] = useState("")
   const [cart, setCart] = useState<CartItem[]>([])
   const [showCheckout, setShowCheckout] = useState(false)
@@ -66,6 +70,7 @@ export function Ventas() {
     { name: string; quantity: number; price: number }[]
   >([])
   const [catalogPickerKey, setCatalogPickerKey] = useState(0)
+  const [salesPrintPeriod, setSalesPrintPeriod] = useState<SalesPrintPeriod>("day")
 
   const filteredProducts = mockProducts.filter(
     (product) =>
@@ -156,6 +161,17 @@ export function Ventas() {
   const fiadosPeriodTotal = visibleSales
     .filter((s) => s.paymentMethod === "fiado")
     .reduce((acc, s) => acc + s.total, 0)
+
+  const ventasHoy = salesHistory.filter((s) => isSameCalendarDay(s.timestamp, now))
+  const recaudadoVentasHoy = ventasHoy
+    .filter((s) => s.paymentMethod === "efectivo" || s.paymentMethod === "tarjeta")
+    .reduce((acc, s) => acc + s.total, 0)
+  const fiadosRegistradosHoy = ventasHoy
+    .filter((s) => s.paymentMethod === "fiado")
+    .reduce((acc, s) => acc + s.total, 0)
+  const abonosRecibidosHoy = abonos
+    .filter((a) => isSameCalendarDay(a.timestamp, now))
+    .reduce((acc, a) => acc + a.amount, 0)
 
   const getPaymentBadge = (method: string) => {
     switch (method) {
@@ -388,13 +404,50 @@ export function Ventas() {
         </TabsContent>
 
         <TabsContent value="history" className="mt-4 space-y-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+          <Card className="border-primary/20 bg-primary/5 shadow-sm">
+            <CardHeader className="pb-2 pt-4">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <Landmark className="h-4 w-4" />
+                Movimiento del día (hoy)
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Dinero cobrado en ventas (efectivo/tarjeta), total fiado registrado y abonos de clientes.
+              </p>
+            </CardHeader>
+            <CardContent className="pb-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="rounded-lg border bg-card/80 p-3">
+                  <p className="text-xs text-muted-foreground">Recaudado en ventas</p>
+                  <p className="text-lg font-bold text-primary sm:text-xl">
+                    {formatQ(recaudadoVentasHoy)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground sm:text-xs">Efectivo y tarjeta</p>
+                </div>
+                <div className="rounded-lg border bg-card/80 p-3">
+                  <p className="text-xs text-muted-foreground">Fiados registrados hoy</p>
+                  <p className="text-lg font-bold text-amber-600 sm:text-xl">
+                    {formatQ(fiadosRegistradosHoy)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground sm:text-xs">Ventas al crédito</p>
+                </div>
+                <div className="rounded-lg border bg-card/80 p-3">
+                  <p className="text-xs text-muted-foreground">Abonos recibidos</p>
+                  <p className="text-lg font-bold text-emerald-600 sm:text-xl">
+                    {formatQ(abonosRecibidosHoy)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground sm:text-xs">Desde clientes</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
             <p className="text-sm text-muted-foreground">
               {salesDayFilter === "today"
                 ? "Mostrando solo ventas del día de hoy."
                 : "Mostrando todas las ventas registradas en esta sesión."}
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant={salesDayFilter === "today" ? "default" : "outline"}
@@ -414,6 +467,34 @@ export function Ventas() {
               >
                 <List className="h-4 w-4" />
                 Todas
+              </Button>
+              <div className="hidden h-6 w-px bg-border sm:block" aria-hidden />
+              <Select
+                value={salesPrintPeriod}
+                onValueChange={(v) => setSalesPrintPeriod(v as SalesPrintPeriod)}
+              >
+                <SelectTrigger className="h-9 w-[130px]">
+                  <SelectValue placeholder="Periodo impresión" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="day">Imprimir: día</SelectItem>
+                  <SelectItem value="week">Imprimir: semana</SelectItem>
+                  <SelectItem value="month">Imprimir: mes</SelectItem>
+                  <SelectItem value="year">Imprimir: año</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  const list = filterSalesByPeriod(salesHistory, salesPrintPeriod, now)
+                  printSalesList(list, salesPrintPeriod, now)
+                }}
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir ventas
               </Button>
             </div>
           </div>
@@ -588,6 +669,15 @@ export function Ventas() {
                 <span className="font-medium">Total</span>
                 <span className="text-2xl font-bold text-primary">{formatQ(selectedSale.total)}</span>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full gap-2"
+                onClick={() => selectedSale && printSaleReceipt(selectedSale)}
+              >
+                <Printer className="h-4 w-4" />
+                Imprimir recibo
+              </Button>
             </div>
           )}
         </DialogContent>

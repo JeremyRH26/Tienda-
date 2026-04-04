@@ -15,9 +15,11 @@ import {
   TrendingUp,
   Pencil,
   Trash2,
+  Printer,
 } from "lucide-react"
 import { mockProducts, categories } from "@/lib/mock-data"
 import { formatQ } from "@/lib/currency"
+import { printInventoryReport } from "@/lib/print"
 import {
   Dialog,
   DialogContent,
@@ -190,6 +192,17 @@ export function Inventario() {
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Inventario</h1>
           <p className="text-sm text-muted-foreground sm:text-base">Gestiona tu stock y productos</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 gap-2 sm:h-12 sm:px-6"
+            onClick={() => printInventoryReport(products)}
+          >
+            <Printer className="h-4 w-4" />
+            <span className="hidden sm:inline">Imprimir inventario</span>
+            <span className="sm:hidden">Imprimir</span>
+          </Button>
         <Dialog open={showAddProduct} onOpenChange={setShowAddProduct}>
           <DialogTrigger asChild>
             <Button className="h-11 gap-2 sm:h-12 sm:px-6">
@@ -369,6 +382,7 @@ export function Inventario() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Stats Cards */}

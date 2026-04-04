@@ -16,13 +16,140 @@ export const mockProducts = [
   { id: 10, name: "Detergente Roma", category: "Limpieza", costPrice: 30, salePrice: 42, stock: 18, minStock: 10, supplier: "Distribuidora Norte", image: productPhoto("tienda-detergente-10") },
 ]
 
-export const mockCustomers = [
-  { id: 1, name: "María García", phone: "555-1234", email: "maria@email.com", balance: 450, lastPurchase: "2024-01-15", totalPurchases: 12500 },
-  { id: 2, name: "Carlos López", phone: "555-5678", email: "carlos@email.com", balance: 0, lastPurchase: "2024-01-18", totalPurchases: 8900 },
-  { id: 3, name: "Ana Martínez", phone: "555-9012", email: "ana@email.com", balance: 1250, lastPurchase: "2024-01-10", totalPurchases: 22400 },
-  { id: 4, name: "Roberto Sánchez", phone: "555-3456", email: "roberto@email.com", balance: 0, lastPurchase: "2024-01-17", totalPurchases: 5600 },
-  { id: 5, name: "Laura Hernández", phone: "555-7890", email: "laura@email.com", balance: 780, lastPurchase: "2024-01-12", totalPurchases: 15800 },
-  { id: 6, name: "Pedro Ramírez", phone: "555-2345", email: "pedro@email.com", balance: 2100, lastPurchase: "2024-01-08", totalPurchases: 31200 },
+/** Líneas de fiado / ventas a crédito que componen la deuda pendiente del cliente */
+export type PendingCreditLine = {
+  id: string
+  fecha: string
+  descripcion: string
+  totalOriginal: number
+  saldoPendiente: number
+}
+
+export type ShopCustomer = {
+  id: number
+  name: string
+  phone: string
+  email: string
+  balance: number
+  lastPurchase: string
+  totalPurchases: number
+  pendingCreditLines: PendingCreditLine[]
+}
+
+export const mockCustomers: ShopCustomer[] = [
+  {
+    id: 1,
+    name: "María García",
+    phone: "555-1234",
+    email: "maria@email.com",
+    balance: 450,
+    lastPurchase: "2024-01-15",
+    totalPurchases: 12500,
+    pendingCreditLines: [
+      {
+        id: "mg-1",
+        fecha: "12/03/2026",
+        descripcion: "Fiado — Abarrotes y bebidas",
+        totalOriginal: 280,
+        saldoPendiente: 200,
+      },
+      {
+        id: "mg-2",
+        fecha: "28/02/2026",
+        descripcion: "Fiado — Lácteos y pan",
+        totalOriginal: 250,
+        saldoPendiente: 250,
+      },
+    ],
+  },
+  {
+    id: 2,
+    name: "Carlos López",
+    phone: "555-5678",
+    email: "carlos@email.com",
+    balance: 0,
+    lastPurchase: "2024-01-18",
+    totalPurchases: 8900,
+    pendingCreditLines: [],
+  },
+  {
+    id: 3,
+    name: "Ana Martínez",
+    phone: "555-9012",
+    email: "ana@email.com",
+    balance: 1250,
+    lastPurchase: "2024-01-10",
+    totalPurchases: 22400,
+    pendingCreditLines: [
+      {
+        id: "am-1",
+        fecha: "08/03/2026",
+        descripcion: "Fiado — Limpieza y snacks",
+        totalOriginal: 600,
+        saldoPendiente: 600,
+      },
+      {
+        id: "am-2",
+        fecha: "01/03/2026",
+        descripcion: "Fiado — Canasta básica",
+        totalOriginal: 650,
+        saldoPendiente: 650,
+      },
+    ],
+  },
+  {
+    id: 4,
+    name: "Roberto Sánchez",
+    phone: "555-3456",
+    email: "roberto@email.com",
+    balance: 0,
+    lastPurchase: "2024-01-17",
+    totalPurchases: 5600,
+    pendingCreditLines: [],
+  },
+  {
+    id: 5,
+    name: "Laura Hernández",
+    phone: "555-7890",
+    email: "laura@email.com",
+    balance: 780,
+    lastPurchase: "2024-01-12",
+    totalPurchases: 15800,
+    pendingCreditLines: [
+      {
+        id: "lh-1",
+        fecha: "10/03/2026",
+        descripcion: "Fiado — Compra general",
+        totalOriginal: 780,
+        saldoPendiente: 780,
+      },
+    ],
+  },
+  {
+    id: 6,
+    name: "Pedro Ramírez",
+    phone: "555-2345",
+    email: "pedro@email.com",
+    balance: 2100,
+    lastPurchase: "2024-01-08",
+    totalPurchases: 31200,
+    pendingCreditLines: [
+      {
+        id: "pr-1",
+        fecha: "05/03/2026",
+        descripcion: "Fiado — Mayoreo abarrotes",
+        totalOriginal: 1100,
+        saldoPendiente: 1100,
+      },
+      {
+        id: "pr-2",
+        fecha: "25/02/2026",
+        descripcion: "Fiado — Bebidas y snacks",
+        totalOriginal: 1000,
+        saldoPendiente: 1000,
+      },
+    ],
+  },
 ]
 
 export const mockSuppliers = [
