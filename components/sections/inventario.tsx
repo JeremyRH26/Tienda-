@@ -13,8 +13,11 @@ import {
   ImagePlus,
   X,
   TrendingUp,
+  Pencil,
+  Trash2,
 } from "lucide-react"
 import { mockProducts, categories } from "@/lib/mock-data"
+import { formatQ } from "@/lib/currency"
 import {
   Dialog,
   DialogContent,
@@ -31,8 +34,23 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+
+type ProductRow = (typeof mockProducts)[0]
 
 export function Inventario() {
+  const [products, setProducts] = useState<ProductRow[]>(() =>
+    mockProducts.map((p) => ({ ...p }))
+  )
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [showAddProduct, setShowAddProduct] = useState(false)
@@ -47,8 +65,19 @@ export function Inventario() {
     minStock: "",
     supplier: "",
   })
+  const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null)
+  const [editProductForm, setEditProductForm] = useState({
+    name: "",
+    category: "",
+    costPrice: "",
+    salePrice: "",
+    stock: "",
+    minStock: "",
+    supplier: "",
+  })
+  const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null)
 
-  const filteredProducts = mockProducts.filter((product) => {
+  const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.supplier.toLowerCase().includes(searchTerm.toLowerCase())
@@ -57,10 +86,10 @@ export function Inventario() {
     return matchesSearch && matchesCategory
   })
 
-  const lowStockCount = mockProducts.filter((p) => p.stock < p.minStock).length
-  const totalProducts = mockProducts.length
-  const totalValue = mockProducts.reduce((acc, p) => acc + p.salePrice * p.stock, 0)
-  const totalMargin = mockProducts.reduce((acc, p) => acc + (p.salePrice - p.costPrice) * p.stock, 0)
+  const lowStockCount = products.filter((p) => p.stock < p.minStock).length
+  const totalProducts = products.length
+  const totalValue = products.reduce((acc, p) => acc + p.salePrice * p.stock, 0)
+  const totalMargin = products.reduce((acc, p) => acc + (p.salePrice - p.costPrice) * p.stock, 0)
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -74,6 +103,26 @@ export function Inventario() {
   }
 
   const handleAddProduct = () => {
+    if (!newProduct.name.trim() || !newProduct.category) return
+    const cost = parseFloat(newProduct.costPrice) || 0
+    const sale = parseFloat(newProduct.salePrice) || 0
+    const stock = parseInt(newProduct.stock, 10) || 0
+    const minStock = parseInt(newProduct.minStock, 10) || 0
+    const nextId = products.length ? Math.max(...products.map((p) => p.id)) + 1 : 1
+    setProducts((prev) => [
+      ...prev,
+      {
+        id: nextId,
+        name: newProduct.name.trim(),
+        category: newProduct.category,
+        costPrice: cost,
+        salePrice: sale,
+        stock,
+        minStock,
+        supplier: newProduct.supplier.trim() || "-",
+        image: productImage || `https://picsum.photos/seed/nuevo${nextId}/480/360`,
+      },
+    ])
     setShowAddProduct(false)
     setProductImage(null)
     setNewProduct({
@@ -85,6 +134,45 @@ export function Inventario() {
       minStock: "",
       supplier: "",
     })
+  }
+
+  const openProductEdit = (p: ProductRow) => {
+    setEditingProduct(p)
+    setEditProductForm({
+      name: p.name,
+      category: p.category,
+      costPrice: String(p.costPrice),
+      salePrice: String(p.salePrice),
+      stock: String(p.stock),
+      minStock: String(p.minStock),
+      supplier: p.supplier,
+    })
+  }
+
+  const saveProductEdit = () => {
+    if (!editingProduct) return
+    const id = editingProduct.id
+    const cost = parseFloat(editProductForm.costPrice) || 0
+    const sale = parseFloat(editProductForm.salePrice) || 0
+    const stock = parseInt(editProductForm.stock, 10) || 0
+    const minStock = parseInt(editProductForm.minStock, 10) || 0
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              name: editProductForm.name.trim() || p.name,
+              category: editProductForm.category || p.category,
+              costPrice: cost,
+              salePrice: sale,
+              stock,
+              minStock,
+              supplier: editProductForm.supplier.trim() || p.supplier,
+            }
+          : p
+      )
+    )
+    setEditingProduct(null)
   }
 
   const calculateMargin = (cost: string, sale: string) => {
@@ -215,7 +303,7 @@ export function Inventario() {
                         setNewProduct({ ...newProduct, costPrice: e.target.value })
                       }
                       className="h-11 sm:h-12"
-                      placeholder="$0.00"
+                      placeholder="0.00"
                     />
                   </div>
                   <div className="space-y-2">
@@ -227,7 +315,7 @@ export function Inventario() {
                         setNewProduct({ ...newProduct, salePrice: e.target.value })
                       }
                       className="h-11 sm:h-12"
-                      placeholder="$0.00"
+                      placeholder="0.00"
                     />
                   </div>
                 </div>
@@ -238,7 +326,12 @@ export function Inventario() {
                       Margen de Ganancia: {calculateMargin(newProduct.costPrice, newProduct.salePrice)}%
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      (${((parseFloat(newProduct.salePrice) || 0) - (parseFloat(newProduct.costPrice) || 0)).toFixed(2)} por unidad)
+                      (
+                      {formatQ(
+                        (parseFloat(newProduct.salePrice) || 0) -
+                          (parseFloat(newProduct.costPrice) || 0)
+                      )}{" "}
+                      por unidad)
                     </span>
                   </div>
                 )}
@@ -309,7 +402,7 @@ export function Inventario() {
             </div>
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground sm:text-sm">Valor Inventario</p>
-              <p className="text-lg font-bold sm:text-2xl">${totalValue.toLocaleString()}</p>
+              <p className="text-lg font-bold sm:text-2xl">{formatQ(totalValue)}</p>
             </div>
           </CardContent>
         </Card>
@@ -320,7 +413,7 @@ export function Inventario() {
             </div>
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground sm:text-sm">Ganancia Potencial</p>
-              <p className="text-lg font-bold text-primary sm:text-2xl">${totalMargin.toLocaleString()}</p>
+              <p className="text-lg font-bold text-primary sm:text-2xl">{formatQ(totalMargin)}</p>
             </div>
           </CardContent>
         </Card>
@@ -355,40 +448,71 @@ export function Inventario() {
         </CardContent>
       </Card>
 
-      {/* Products - Cards for mobile, Table for desktop */}
       <Card className="shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold sm:text-base">
-            Lista de Productos ({filteredProducts.length})
+            Productos ({filteredProducts.length})
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0">
-          {/* Mobile: Card layout */}
-          <div className="space-y-3 p-4 sm:hidden">
+        <CardContent className="p-4 sm:p-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredProducts.map((product) => {
-              const margin = ((product.salePrice - product.costPrice) / product.salePrice * 100).toFixed(1)
+              const margin = (
+                ((product.salePrice - product.costPrice) / product.salePrice) *
+                100
+              ).toFixed(1)
               return (
-                <div 
-                  key={product.id} 
-                  className="rounded-lg border bg-card p-4"
-                >
-                  <div className="mb-3 flex items-start gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-muted">
-                      {product.image ? (
-                        <img src={product.image} alt={product.name} className="h-full w-full rounded-lg object-cover" />
-                      ) : (
-                        <span className="text-lg font-bold text-muted-foreground">
+                <Card key={product.id} className="overflow-hidden shadow-sm">
+                  <div className="relative aspect-[4/3] w-full bg-muted">
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <span className="text-4xl font-bold text-muted-foreground">
                           {product.name.charAt(0)}
                         </span>
-                      )}
+                      </div>
+                    )}
+                    <div className="absolute right-2 top-2 flex gap-1">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="h-8 w-8 shadow-md"
+                        aria-label="Editar"
+                        onClick={() => openProductEdit(product)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="h-8 w-8 text-destructive shadow-md hover:text-destructive"
+                        aria-label="Eliminar"
+                        onClick={() => setDeletingProduct(product)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-medium">{product.name}</h3>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <Badge variant="secondary" className="text-xs">{product.category}</Badge>
+                  </div>
+                  <CardContent className="space-y-3 p-4">
+                    <div>
+                      <h3 className="line-clamp-2 font-semibold leading-tight">{product.name}</h3>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {product.category}
+                        </Badge>
                         {product.stock < product.minStock ? (
-                          <Badge variant="outline" className="border-amber-500 text-xs text-amber-600">
-                            Stock Bajo
+                          <Badge
+                            variant="outline"
+                            className="border-amber-500 text-xs text-amber-600"
+                          >
+                            Stock bajo
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="border-primary text-xs text-primary">
@@ -397,116 +521,163 @@ export function Inventario() {
                         )}
                       </div>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Costo</p>
-                      <p className="font-medium">${product.costPrice}</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Costo</p>
+                        <p className="font-medium">{formatQ(product.costPrice)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Venta</p>
+                        <p className="font-semibold text-primary">{formatQ(product.salePrice)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Stock</p>
+                        <p
+                          className={`font-medium ${
+                            product.stock < product.minStock ? "text-amber-600" : ""
+                          }`}
+                        >
+                          {product.stock}{" "}
+                          <span className="text-muted-foreground">/ mín. {product.minStock}</span>
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Margen</p>
+                        <p className="font-medium text-primary">{margin}%</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Venta</p>
-                      <p className="font-medium text-primary">${product.salePrice}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Stock</p>
-                      <p className={`font-medium ${product.stock < product.minStock ? "text-amber-600" : ""}`}>
-                        {product.stock} / {product.minStock} min
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Margen</p>
-                      <p className="font-medium text-primary">{margin}%</p>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{product.supplier}</p>
-                </div>
+                    <p className="truncate text-xs text-muted-foreground">{product.supplier}</p>
+                  </CardContent>
+                </Card>
               )
             })}
           </div>
-
-          {/* Desktop: Table layout */}
-          <div className="hidden overflow-x-auto sm:block">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b bg-muted/30">
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Producto</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Categoría</th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">P. Costo</th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">P. Venta</th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Margen</th>
-                  <th className="px-4 py-3 text-right text-sm font-medium text-muted-foreground">Stock</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Proveedor</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium text-muted-foreground">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.map((product) => {
-                  const margin = ((product.salePrice - product.costPrice) / product.salePrice * 100).toFixed(1)
-                  return (
-                    <tr key={product.id} className="border-b last:border-0">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                            {product.image ? (
-                              <img src={product.image} alt={product.name} className="h-full w-full rounded-lg object-cover" />
-                            ) : (
-                              <span className="text-sm font-bold text-muted-foreground">
-                                {product.name.charAt(0)}
-                              </span>
-                            )}
-                          </div>
-                          <span className="font-medium">{product.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="secondary">{product.category}</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-right text-muted-foreground">
-                        ${product.costPrice}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        ${product.salePrice}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="font-medium text-primary">{margin}%</span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span
-                          className={
-                            product.stock < product.minStock
-                              ? "font-bold text-amber-600"
-                              : ""
-                          }
-                        >
-                          {product.stock}
-                        </span>
-                        <span className="text-muted-foreground">
-                          {" "}
-                          / {product.minStock} min
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {product.supplier}
-                      </td>
-                      <td className="px-4 py-3">
-                        {product.stock < product.minStock ? (
-                          <Badge variant="outline" className="border-amber-500 text-amber-600">
-                            Stock Bajo
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="border-primary text-primary">
-                            Normal
-                          </Badge>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
         </CardContent>
       </Card>
+
+      <Dialog open={editingProduct !== null} onOpenChange={(open) => !open && setEditingProduct(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Editar producto</DialogTitle>
+            <DialogDescription>Actualiza precios, stock y datos del producto.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nombre</label>
+              <Input
+                value={editProductForm.name}
+                onChange={(e) => setEditProductForm({ ...editProductForm, name: e.target.value })}
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Categoría</label>
+              <Select
+                value={editProductForm.category}
+                onValueChange={(v) => setEditProductForm({ ...editProductForm, category: v })}
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Proveedor</label>
+              <Input
+                value={editProductForm.supplier}
+                onChange={(e) =>
+                  setEditProductForm({ ...editProductForm, supplier: e.target.value })
+                }
+                className="h-11"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Precio costo</label>
+                <Input
+                  type="number"
+                  value={editProductForm.costPrice}
+                  onChange={(e) =>
+                    setEditProductForm({ ...editProductForm, costPrice: e.target.value })
+                  }
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Precio venta</label>
+                <Input
+                  type="number"
+                  value={editProductForm.salePrice}
+                  onChange={(e) =>
+                    setEditProductForm({ ...editProductForm, salePrice: e.target.value })
+                  }
+                  className="h-11"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Stock</label>
+                <Input
+                  type="number"
+                  value={editProductForm.stock}
+                  onChange={(e) =>
+                    setEditProductForm({ ...editProductForm, stock: e.target.value })
+                  }
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Stock mínimo</label>
+                <Input
+                  type="number"
+                  value={editProductForm.minStock}
+                  onChange={(e) =>
+                    setEditProductForm({ ...editProductForm, minStock: e.target.value })
+                  }
+                  className="h-11"
+                />
+              </div>
+            </div>
+            <Button className="h-11 w-full" onClick={saveProductEdit}>
+              Guardar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deletingProduct !== null} onOpenChange={(open) => !open && setDeletingProduct(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar producto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se quitará {deletingProduct?.name} del inventario.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingProduct) {
+                  const id = deletingProduct.id
+                  setProducts((prev) => prev.filter((p) => p.id !== id))
+                }
+                setDeletingProduct(null)
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

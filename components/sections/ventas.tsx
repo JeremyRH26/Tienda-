@@ -4,8 +4,9 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Plus, Minus, Trash2, CreditCard, Banknote, User, ShoppingCart, Receipt, Clock, Eye } from "lucide-react"
-import { mockProducts, mockCustomers, mockTodaySales, type SaleRecord } from "@/lib/mock-data"
+import { Search, Plus, Minus, Trash2, CreditCard, Banknote, User, ShoppingCart, Receipt, Clock, Eye, Pencil, CalendarDays, List } from "lucide-react"
+import { mockProducts, mockCustomers, mockSalesHistoryExtended, type SaleRecord } from "@/lib/mock-data"
+import { formatQ, isSameCalendarDay } from "@/lib/currency"
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,16 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface CartItem {
   product: typeof mockProducts[0]
@@ -41,9 +52,16 @@ export function Ventas() {
   const [selectedCustomer, setSelectedCustomer] = useState<string>("")
   const [paymentMethod, setPaymentMethod] = useState<string>("efectivo")
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
-  const [salesHistory, setSalesHistory] = useState<SaleRecord[]>(mockTodaySales)
+  const [salesHistory, setSalesHistory] = useState<SaleRecord[]>(() =>
+    mockSalesHistoryExtended.map((s) => ({ ...s, timestamp: new Date(s.timestamp) }))
+  )
+  const [salesDayFilter, setSalesDayFilter] = useState<"today" | "all">("today")
   const [selectedSale, setSelectedSale] = useState<SaleRecord | null>(null)
   const [showSaleDetail, setShowSaleDetail] = useState(false)
+  const [saleToDelete, setSaleToDelete] = useState<SaleRecord | null>(null)
+  const [editingSale, setEditingSale] = useState<SaleRecord | null>(null)
+  const [editSaleCustomer, setEditSaleCustomer] = useState("")
+  const [editSalePayment, setEditSalePayment] = useState<string>("efectivo")
 
   const filteredProducts = mockProducts.filter(
     (product) =>
@@ -88,11 +106,20 @@ export function Ventas() {
 
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0)
 
-  const todayTotal = salesHistory.reduce((acc, sale) => acc + sale.total, 0)
+  const now = new Date()
+  const visibleSales =
+    salesDayFilter === "today"
+      ? salesHistory.filter((s) => isSameCalendarDay(s.timestamp, now))
+      : salesHistory
+
+  const todayTotal = visibleSales.reduce((acc, sale) => acc + sale.total, 0)
+
+  const nextSaleId = () =>
+    salesHistory.length ? Math.max(...salesHistory.map((s) => s.id)) + 1 : 1
 
   const handleCheckout = () => {
     const newSale: SaleRecord = {
-      id: salesHistory.length + 1,
+      id: nextSaleId(),
       timestamp: new Date(),
       customer: selectedCustomer ? mockCustomers.find(c => c.id.toString() === selectedCustomer)?.name || "Cliente General" : "Cliente General",
       items: cart.map(item => ({ name: item.product.name, quantity: item.quantity, price: item.product.salePrice })),
@@ -109,8 +136,22 @@ export function Ventas() {
   }
 
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })
+    return date.toLocaleTimeString("es-GT", { hour: "2-digit", minute: "2-digit" })
   }
+
+  const formatDateTime = (date: Date) => {
+    if (isSameCalendarDay(date, new Date())) return formatTime(date)
+    return date.toLocaleString("es-GT", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+  }
+
+  const fiadosPeriodTotal = visibleSales
+    .filter((s) => s.paymentMethod === "fiado")
+    .reduce((acc, s) => acc + s.total, 0)
 
   const getPaymentBadge = (method: string) => {
     switch (method) {
@@ -153,7 +194,7 @@ export function Ventas() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{item.product.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    ${item.product.salePrice} c/u
+                    {formatQ(item.product.salePrice)} c/u
                   </p>
                 </div>
                 <div className="flex items-center gap-1 sm:gap-2">
@@ -196,7 +237,7 @@ export function Ventas() {
         <div className="mb-4 flex items-center justify-between">
           <span className="text-sm font-medium text-muted-foreground">Total</span>
           <span className="text-2xl font-bold text-primary">
-            ${total.toLocaleString()}
+            {formatQ(total)}
           </span>
         </div>
         <Button
@@ -298,7 +339,7 @@ export function Ventas() {
                         <p className="text-xs text-muted-foreground">{product.category}</p>
                         <div className="mt-2 flex items-center justify-between">
                           <span className="text-base font-bold text-primary sm:text-lg">
-                            ${product.salePrice}
+                            {formatQ(product.salePrice)}
                           </span>
                           <span className="text-xs text-muted-foreground">
                             {product.stock}
@@ -335,7 +376,7 @@ export function Ventas() {
                 >
                   <ShoppingCart className="h-5 w-5" />
                   Ver Carrito ({cartItemCount})
-                  <span className="ml-auto font-bold">${total.toLocaleString()}</span>
+                  <span className="ml-auto font-bold">{formatQ(total)}</span>
                 </Button>
               </div>
             )}
@@ -343,7 +384,36 @@ export function Ventas() {
         </TabsContent>
 
         <TabsContent value="history" className="mt-4 space-y-4">
-          {/* Today's Stats */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <p className="text-sm text-muted-foreground">
+              {salesDayFilter === "today"
+                ? "Mostrando solo ventas del día de hoy."
+                : "Mostrando todas las ventas registradas en esta sesión."}
+            </p>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={salesDayFilter === "today" ? "default" : "outline"}
+                size="sm"
+                className="gap-2"
+                onClick={() => setSalesDayFilter("today")}
+              >
+                <CalendarDays className="h-4 w-4" />
+                Solo hoy
+              </Button>
+              <Button
+                type="button"
+                variant={salesDayFilter === "all" ? "default" : "outline"}
+                size="sm"
+                className="gap-2"
+                onClick={() => setSalesDayFilter("all")}
+              >
+                <List className="h-4 w-4" />
+                Todas
+              </Button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
             <Card className="shadow-sm">
               <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
@@ -351,8 +421,10 @@ export function Ventas() {
                   <Receipt className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">Ventas Hoy</p>
-                  <p className="text-lg font-bold sm:text-2xl">{salesHistory.length}</p>
+                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                    {salesDayFilter === "today" ? "Ventas hoy" : "Ventas"}
+                  </p>
+                  <p className="text-lg font-bold sm:text-2xl">{visibleSales.length}</p>
                 </div>
               </CardContent>
             </Card>
@@ -362,8 +434,10 @@ export function Ventas() {
                   <Banknote className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">Total Hoy</p>
-                  <p className="text-lg font-bold text-primary sm:text-2xl">${todayTotal.toLocaleString()}</p>
+                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                    {salesDayFilter === "today" ? "Total hoy" : "Total"}
+                  </p>
+                  <p className="text-lg font-bold text-primary sm:text-2xl">{formatQ(todayTotal)}</p>
                 </div>
               </CardContent>
             </Card>
@@ -373,49 +447,101 @@ export function Ventas() {
                   <User className="h-5 w-5 text-amber-600 sm:h-6 sm:w-6" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">Fiados Hoy</p>
+                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                    {salesDayFilter === "today" ? "Fiados hoy" : "Fiados"}
+                  </p>
                   <p className="text-lg font-bold text-amber-600 sm:text-2xl">
-                    ${salesHistory.filter(s => s.paymentMethod === "fiado").reduce((acc, s) => acc + s.total, 0).toLocaleString()}
+                    {formatQ(fiadosPeriodTotal)}
                   </p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Sales List */}
           <Card className="shadow-sm">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold sm:text-base">
                 <Clock className="h-4 w-4" />
-                Historial de Ventas del Dia
+                Historial de ventas
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y">
-                {salesHistory.map((sale) => (
-                  <div 
-                    key={sale.id} 
-                    className="flex cursor-pointer items-center gap-4 p-4 transition-colors hover:bg-muted/50"
-                    onClick={() => { setSelectedSale(sale); setShowSaleDetail(true); }}
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 sm:h-12 sm:w-12">
-                      <Receipt className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium sm:text-base">{sale.customer}</p>
-                        {getPaymentBadge(sale.paymentMethod)}
+                {visibleSales.length === 0 ? (
+                  <p className="p-6 text-center text-sm text-muted-foreground">
+                    No hay ventas en el periodo seleccionado.
+                  </p>
+                ) : (
+                  visibleSales.map((sale) => (
+                    <div
+                      key={sale.id}
+                      className="flex cursor-pointer items-center gap-3 p-4 transition-colors hover:bg-muted/50 sm:gap-4"
+                      onClick={() => {
+                        setSelectedSale(sale)
+                        setShowSaleDetail(true)
+                      }}
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 sm:h-12 sm:w-12">
+                        <Receipt className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
                       </div>
-                      <p className="text-xs text-muted-foreground sm:text-sm">
-                        {sale.items.length} producto{sale.items.length > 1 ? "s" : ""} - {formatTime(sale.timestamp)}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-medium sm:text-base">{sale.customer}</p>
+                          {getPaymentBadge(sale.paymentMethod)}
+                        </div>
+                        <p className="text-xs text-muted-foreground sm:text-sm">
+                          {sale.items.length} producto{sale.items.length > 1 ? "s" : ""} ·{" "}
+                          {formatDateTime(sale.timestamp)}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-base font-bold text-primary sm:text-lg">
+                        {formatQ(sale.total)}
                       </p>
+                      <div
+                        className="flex shrink-0 items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground"
+                          aria-label="Ver detalle"
+                          onClick={() => {
+                            setSelectedSale(sale)
+                            setShowSaleDetail(true)
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground"
+                          aria-label="Editar venta"
+                          onClick={() => {
+                            setEditingSale(sale)
+                            setEditSaleCustomer(sale.customer)
+                            setEditSalePayment(sale.paymentMethod)
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          aria-label="Eliminar venta"
+                          onClick={() => setSaleToDelete(sale)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-base font-bold text-primary sm:text-lg">${sale.total}</p>
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -445,15 +571,17 @@ export function Ventas() {
                   <div key={index} className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
                     <div>
                       <p className="text-sm font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">${item.price} x {item.quantity}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatQ(item.price)} × {item.quantity}
+                      </p>
                     </div>
-                    <p className="font-medium">${item.price * item.quantity}</p>
+                    <p className="font-medium">{formatQ(item.price * item.quantity)}</p>
                   </div>
                 ))}
               </div>
               <div className="flex items-center justify-between rounded-lg bg-primary/10 p-4">
                 <span className="font-medium">Total</span>
-                <span className="text-2xl font-bold text-primary">${selectedSale.total}</span>
+                <span className="text-2xl font-bold text-primary">{formatQ(selectedSale.total)}</span>
               </div>
             </div>
           )}
@@ -522,7 +650,7 @@ export function Ventas() {
               <div className="flex items-center justify-between">
                 <span className="font-medium">Total a Cobrar</span>
                 <span className="text-2xl font-bold text-primary">
-                  ${total.toLocaleString()}
+                  {formatQ(total)}
                 </span>
               </div>
             </div>
@@ -533,6 +661,97 @@ export function Ventas() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={editingSale !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingSale(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar venta</DialogTitle>
+            <DialogDescription>
+              Actualiza el cliente y el método de pago registrados en esta venta.
+            </DialogDescription>
+          </DialogHeader>
+          {editingSale && (
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Cliente</label>
+                <Input
+                  value={editSaleCustomer}
+                  onChange={(e) => setEditSaleCustomer(e.target.value)}
+                  className="h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Método de pago</label>
+                <Select value={editSalePayment} onValueChange={setEditSalePayment}>
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                    <SelectItem value="fiado">Fiado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                className="h-11 w-full"
+                onClick={() => {
+                  const id = editingSale.id
+                  setSalesHistory((prev) =>
+                    prev.map((s) =>
+                      s.id === id
+                        ? {
+                            ...s,
+                            customer: editSaleCustomer.trim() || s.customer,
+                            paymentMethod: editSalePayment as SaleRecord["paymentMethod"],
+                          }
+                        : s
+                    )
+                  )
+                  setEditingSale(null)
+                }}
+              >
+                Guardar cambios
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={saleToDelete !== null} onOpenChange={(open) => !open && setSaleToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta venta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción quitará el registro del historial. No se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (saleToDelete) {
+                  const id = saleToDelete.id
+                  setSalesHistory((prev) => prev.filter((s) => s.id !== id))
+                  if (selectedSale?.id === id) {
+                    setSelectedSale(null)
+                    setShowSaleDetail(false)
+                  }
+                }
+                setSaleToDelete(null)
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

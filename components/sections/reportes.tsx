@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { TrendingUp, TrendingDown, Calendar } from "lucide-react"
 import { mockSalesData, mockMonthlySales } from "@/lib/mock-data"
+import { formatQ, formatQChartTick } from "@/lib/currency"
 import {
   Area,
   AreaChart,
@@ -70,7 +71,7 @@ export function Reportes() {
                   Ventas {period === "semanal" ? "Semanales" : "del Semestre"}
                 </p>
                 <p className="text-2xl font-bold">
-                  ${currentTotal.toLocaleString()}
+                  {formatQ(currentTotal)}
                 </p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
@@ -92,7 +93,7 @@ export function Reportes() {
                   Gastos {period === "semanal" ? "Semanales" : "del Semestre"}
                 </p>
                 <p className="text-2xl font-bold">
-                  ${currentExpenses.toLocaleString()}
+                  {formatQ(currentExpenses)}
                 </p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
@@ -114,7 +115,7 @@ export function Reportes() {
                   Ganancia Neta
                 </p>
                 <p className="text-2xl font-bold text-primary">
-                  ${currentProfit.toLocaleString()}
+                  {formatQ(currentProfit)}
                 </p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
@@ -165,10 +166,7 @@ export function Reportes() {
                       border: "1px solid hsl(var(--border))",
                       borderRadius: "8px",
                     }}
-                    formatter={(value: number) => [
-                      `$${value.toLocaleString()}`,
-                      "Ventas",
-                    ]}
+                    formatter={(value: number) => [formatQ(value), "Ventas"]}
                   />
                   <Area
                     type="monotone"
@@ -213,7 +211,7 @@ export function Reportes() {
                       borderRadius: "8px",
                     }}
                     formatter={(value: number, name: string) => [
-                      `$${value.toLocaleString()}`,
+                      formatQ(value),
                       name === "sales" ? "Ventas" : "Gastos",
                     ]}
                   />
@@ -278,13 +276,13 @@ export function Reportes() {
                         {"day" in row ? row.day : row.month}
                       </td>
                       <td className="py-3 text-right">
-                        ${row.sales.toLocaleString()}
+                        {formatQ(row.sales)}
                       </td>
                       <td className="py-3 text-right text-muted-foreground">
-                        ${row.expenses.toLocaleString()}
+                        {formatQ(row.expenses)}
                       </td>
                       <td className="py-3 text-right font-medium text-primary">
-                        ${profit.toLocaleString()}
+                        {formatQ(profit)}
                       </td>
                       <td className="py-3 text-right text-muted-foreground">
                         {margin}%

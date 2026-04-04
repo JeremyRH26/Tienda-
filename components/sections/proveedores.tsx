@@ -13,8 +13,11 @@ import {
   Calendar,
   Package,
   DollarSign,
+  Pencil,
+  Trash2,
 } from "lucide-react"
 import { mockSuppliers } from "@/lib/mock-data"
+import { formatQ } from "@/lib/currency"
 import {
   Dialog,
   DialogContent,
@@ -24,13 +27,34 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type Supplier = typeof mockSuppliers[0]
 
 export function Proveedores() {
+  const [suppliers, setSuppliers] = useState<Supplier[]>(() =>
+    mockSuppliers.map((s) => ({ ...s, products: [...s.products] }))
+  )
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddSupplier, setShowAddSupplier] = useState(false)
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
+  const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(null)
+  const [editSupplierForm, setEditSupplierForm] = useState({
+    name: "",
+    contact: "",
+    phone: "",
+    email: "",
+  })
   const [newSupplier, setNewSupplier] = useState({
     name: "",
     contact: "",
@@ -38,7 +62,7 @@ export function Proveedores() {
     email: "",
   })
 
-  const filteredSuppliers = mockSuppliers.filter(
+  const filteredSuppliers = suppliers.filter(
     (supplier) =>
       supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       supplier.contact.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -47,17 +71,67 @@ export function Proveedores() {
       )
   )
 
-  const totalPending = mockSuppliers.reduce(
-    (acc, s) => acc + s.pendingPayment,
-    0
-  )
-  const suppliersWithPending = mockSuppliers.filter(
-    (s) => s.pendingPayment > 0
-  ).length
+  const totalPending = suppliers.reduce((acc, s) => acc + s.pendingPayment, 0)
+  const suppliersWithPending = suppliers.filter((s) => s.pendingPayment > 0).length
 
   const handleAddSupplier = () => {
+    if (!newSupplier.name.trim()) return
+    const nextId = suppliers.length ? Math.max(...suppliers.map((s) => s.id)) + 1 : 1
+    setSuppliers((prev) => [
+      ...prev,
+      {
+        id: nextId,
+        name: newSupplier.name.trim(),
+        contact: newSupplier.contact.trim() || "-",
+        phone: newSupplier.phone.trim() || "-",
+        email: newSupplier.email.trim() || "-",
+        products: [],
+        pendingPayment: 0,
+        nextPayment: null,
+      },
+    ])
     setShowAddSupplier(false)
     setNewSupplier({ name: "", contact: "", phone: "", email: "" })
+  }
+
+  const openSupplierEdit = (s: Supplier) => {
+    setEditingSupplier(s)
+    setEditSupplierForm({
+      name: s.name,
+      contact: s.contact,
+      phone: s.phone,
+      email: s.email,
+    })
+  }
+
+  const saveSupplierEdit = () => {
+    if (!editingSupplier) return
+    const id = editingSupplier.id
+    setSuppliers((prev) =>
+      prev.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              name: editSupplierForm.name.trim() || s.name,
+              contact: editSupplierForm.contact.trim() || s.contact,
+              phone: editSupplierForm.phone.trim() || s.phone,
+              email: editSupplierForm.email.trim() || s.email,
+            }
+          : s
+      )
+    )
+    setSelectedSupplier((cur) =>
+      cur?.id === id
+        ? {
+            ...cur,
+            name: editSupplierForm.name.trim() || cur.name,
+            contact: editSupplierForm.contact.trim() || cur.contact,
+            phone: editSupplierForm.phone.trim() || cur.phone,
+            email: editSupplierForm.email.trim() || cur.email,
+          }
+        : cur
+    )
+    setEditingSupplier(null)
   }
 
   return (
@@ -145,7 +219,7 @@ export function Proveedores() {
             </div>
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground sm:text-sm">Total Proveedores</p>
-              <p className="text-lg font-bold sm:text-2xl">{mockSuppliers.length}</p>
+              <p className="text-lg font-bold sm:text-2xl">{suppliers.length}</p>
             </div>
           </CardContent>
         </Card>
@@ -157,7 +231,7 @@ export function Proveedores() {
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground sm:text-sm">Por Pagar</p>
               <p className="text-lg font-bold text-amber-600 sm:text-2xl">
-                ${totalPending.toLocaleString()}
+                {formatQ(totalPending)}
               </p>
             </div>
           </CardContent>
@@ -191,11 +265,36 @@ export function Proveedores() {
         {filteredSuppliers.map((supplier) => (
           <Card
             key={supplier.id}
-            className="cursor-pointer shadow-sm transition-all hover:shadow-md"
+            className="relative cursor-pointer shadow-sm transition-all hover:shadow-md"
             onClick={() => setSelectedSupplier(supplier)}
           >
             <CardContent className="p-6">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div
+                className="absolute right-3 top-3 flex gap-0.5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Editar proveedor"
+                  onClick={() => openSupplierEdit(supplier)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  aria-label="Eliminar proveedor"
+                  onClick={() => setDeletingSupplier(supplier)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex flex-col gap-4 pr-14 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                     <Truck className="h-6 w-6 text-primary" />
@@ -217,7 +316,7 @@ export function Proveedores() {
                   {supplier.pendingPayment > 0 && (
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="border-amber-500 text-amber-600">
-                        Pago: ${supplier.pendingPayment.toLocaleString()}
+                        Pago: {formatQ(supplier.pendingPayment)}
                       </Badge>
                       {supplier.nextPayment && (
                         <Badge variant="secondary">
@@ -306,7 +405,7 @@ export function Proveedores() {
                           Pago Pendiente
                         </p>
                         <p className="text-2xl font-bold text-amber-600">
-                          ${selectedSupplier.pendingPayment.toLocaleString()}
+                          {formatQ(selectedSupplier.pendingPayment)}
                         </p>
                       </div>
                       <div className="text-right">
@@ -342,6 +441,80 @@ export function Proveedores() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={editingSupplier !== null} onOpenChange={(open) => !open && setEditingSupplier(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar proveedor</DialogTitle>
+            <DialogDescription>Actualiza los datos del proveedor.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Empresa</label>
+              <Input
+                value={editSupplierForm.name}
+                onChange={(e) => setEditSupplierForm({ ...editSupplierForm, name: e.target.value })}
+                className="h-12"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Contacto</label>
+              <Input
+                value={editSupplierForm.contact}
+                onChange={(e) => setEditSupplierForm({ ...editSupplierForm, contact: e.target.value })}
+                className="h-12"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Teléfono</label>
+              <Input
+                value={editSupplierForm.phone}
+                onChange={(e) => setEditSupplierForm({ ...editSupplierForm, phone: e.target.value })}
+                className="h-12"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Correo</label>
+              <Input
+                type="email"
+                value={editSupplierForm.email}
+                onChange={(e) => setEditSupplierForm({ ...editSupplierForm, email: e.target.value })}
+                className="h-12"
+              />
+            </div>
+            <Button className="h-12 w-full" onClick={saveSupplierEdit}>
+              Guardar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deletingSupplier !== null} onOpenChange={(open) => !open && setDeletingSupplier(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar proveedor?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará {deletingSupplier?.name} de la lista.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingSupplier) {
+                  const id = deletingSupplier.id
+                  setSuppliers((prev) => prev.filter((s) => s.id !== id))
+                  setSelectedSupplier((cur) => (cur?.id === id ? null : cur))
+                }
+                setDeletingSupplier(null)
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

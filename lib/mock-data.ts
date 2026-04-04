@@ -1,16 +1,19 @@
 // Mock data for the business management app
 
+const productPhoto = (seed: string) =>
+  `https://picsum.photos/seed/${encodeURIComponent(seed)}/480/360`
+
 export const mockProducts = [
-  { id: 1, name: "Coca-Cola 600ml", category: "Bebidas", costPrice: 18, salePrice: 25, stock: 48, minStock: 20, supplier: "Distribuidora El Sol", image: null },
-  { id: 2, name: "Pan Bimbo Grande", category: "Panadería", costPrice: 48, salePrice: 65, stock: 12, minStock: 15, supplier: "Bimbo", image: null },
-  { id: 3, name: "Leche Lala 1L", category: "Lácteos", costPrice: 24, salePrice: 32, stock: 35, minStock: 25, supplier: "Grupo Lala", image: null },
-  { id: 4, name: "Jabón Zote", category: "Limpieza", costPrice: 12, salePrice: 18, stock: 5, minStock: 10, supplier: "Distribuidora Norte", image: null },
-  { id: 5, name: "Huevos Docena", category: "Básicos", costPrice: 42, salePrice: 58, stock: 20, minStock: 10, supplier: "Granja San Pedro", image: null },
-  { id: 6, name: "Arroz 1kg", category: "Básicos", costPrice: 25, salePrice: 35, stock: 45, minStock: 20, supplier: "Distribuidora El Sol", image: null },
-  { id: 7, name: "Aceite 1L", category: "Básicos", costPrice: 35, salePrice: 48, stock: 22, minStock: 15, supplier: "Distribuidora Norte", image: null },
-  { id: 8, name: "Sabritas Original", category: "Snacks", costPrice: 15, salePrice: 22, stock: 60, minStock: 30, supplier: "PepsiCo", image: null },
-  { id: 9, name: "Galletas Marías", category: "Snacks", costPrice: 10, salePrice: 15, stock: 8, minStock: 15, supplier: "Gamesa", image: null },
-  { id: 10, name: "Detergente Roma", category: "Limpieza", costPrice: 30, salePrice: 42, stock: 18, minStock: 10, supplier: "Distribuidora Norte", image: null },
+  { id: 1, name: "Coca-Cola 600ml", category: "Bebidas", costPrice: 18, salePrice: 25, stock: 48, minStock: 20, supplier: "Distribuidora El Sol", image: productPhoto("tienda-bebida-1") },
+  { id: 2, name: "Pan Bimbo Grande", category: "Panadería", costPrice: 48, salePrice: 65, stock: 12, minStock: 15, supplier: "Bimbo", image: productPhoto("tienda-pan-2") },
+  { id: 3, name: "Leche Lala 1L", category: "Lácteos", costPrice: 24, salePrice: 32, stock: 35, minStock: 25, supplier: "Grupo Lala", image: productPhoto("tienda-lacteo-3") },
+  { id: 4, name: "Jabón Zote", category: "Limpieza", costPrice: 12, salePrice: 18, stock: 5, minStock: 10, supplier: "Distribuidora Norte", image: productPhoto("tienda-limpieza-4") },
+  { id: 5, name: "Huevos Docena", category: "Básicos", costPrice: 42, salePrice: 58, stock: 20, minStock: 10, supplier: "Granja San Pedro", image: productPhoto("tienda-huevo-5") },
+  { id: 6, name: "Arroz 1kg", category: "Básicos", costPrice: 25, salePrice: 35, stock: 45, minStock: 20, supplier: "Distribuidora El Sol", image: productPhoto("tienda-arroz-6") },
+  { id: 7, name: "Aceite 1L", category: "Básicos", costPrice: 35, salePrice: 48, stock: 22, minStock: 15, supplier: "Distribuidora Norte", image: productPhoto("tienda-aceite-7") },
+  { id: 8, name: "Sabritas Original", category: "Snacks", costPrice: 15, salePrice: 22, stock: 60, minStock: 30, supplier: "PepsiCo", image: productPhoto("tienda-snack-8") },
+  { id: 9, name: "Galletas Marías", category: "Snacks", costPrice: 10, salePrice: 15, stock: 8, minStock: 15, supplier: "Gamesa", image: productPhoto("tienda-galleta-9") },
+  { id: 10, name: "Detergente Roma", category: "Limpieza", costPrice: 30, salePrice: 42, stock: 18, minStock: 10, supplier: "Distribuidora Norte", image: productPhoto("tienda-detergente-10") },
 ]
 
 export const mockCustomers = [
@@ -46,19 +49,19 @@ export interface Employee {
   id: number
   name: string
   role: "admin" | "cajero"
-  email: string
+  username: string
+  password: string
   phone: string
   status: "active" | "inactive"
   shift: string
-  password?: string
   permissions: ModulePermission[]
 }
 
 export const mockEmployees: Employee[] = [
-  { id: 1, name: "Juan Díaz", role: "admin", email: "juan@tienda.com", phone: "555-0001", status: "active", shift: "Matutino", password: "admin123", permissions: ["dashboard", "ventas", "inventario", "clientes", "proveedores", "equipo", "reportes"] },
-  { id: 2, name: "María Flores", role: "cajero", email: "maria@tienda.com", phone: "555-0002", status: "active", shift: "Vespertino", password: "maria123", permissions: ["dashboard", "ventas", "clientes"] },
-  { id: 3, name: "Pedro Gómez", role: "cajero", email: "pedro@tienda.com", phone: "555-0003", status: "inactive", shift: "Nocturno", password: "pedro123", permissions: ["ventas"] },
-  { id: 4, name: "Ana Morales", role: "cajero", email: "ana@tienda.com", phone: "555-0004", status: "active", shift: "Matutino", password: "ana123", permissions: ["dashboard", "ventas", "inventario", "clientes"] },
+  { id: 1, name: "Juan Díaz", role: "admin", username: "juan.admin", password: "Admin2024!", phone: "555-0001", status: "active", shift: "Matutino", permissions: ["dashboard", "ventas", "inventario", "clientes", "proveedores", "equipo", "reportes"] },
+  { id: 2, name: "María Flores", role: "cajero", username: "maria.caja", password: "Caja2024!", phone: "555-0002", status: "active", shift: "Vespertino", permissions: ["dashboard", "ventas", "clientes"] },
+  { id: 3, name: "Pedro Gómez", role: "cajero", username: "pedro.caja", password: "Pedro2024!", phone: "555-0003", status: "inactive", shift: "Nocturno", permissions: ["ventas"] },
+  { id: 4, name: "Ana Morales", role: "cajero", username: "ana.caja", password: "Ana2024!", phone: "555-0004", status: "active", shift: "Matutino", permissions: ["dashboard", "ventas", "inventario", "clientes"] },
 ]
 
 export interface SaleRecord {
@@ -71,7 +74,14 @@ export interface SaleRecord {
   employeeId: number
 }
 
-// Today's sales history
+function yesterdayAt(hour: number, minute = 0): Date {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  d.setHours(hour, minute, 0, 0)
+  return d
+}
+
+// Ventas de ejemplo de hoy (misma fecha que al cargar la app)
 export const mockTodaySales: SaleRecord[] = [
   { id: 1, timestamp: new Date(Date.now() - 1000 * 60 * 5), customer: "María García", items: [{ name: "Coca-Cola 600ml", quantity: 2, price: 25 }, { name: "Sabritas Original", quantity: 1, price: 22 }], total: 72, paymentMethod: "efectivo", employeeId: 1 },
   { id: 2, timestamp: new Date(Date.now() - 1000 * 60 * 15), customer: "Cliente General", items: [{ name: "Pan Bimbo Grande", quantity: 1, price: 65 }, { name: "Leche Lala 1L", quantity: 2, price: 32 }], total: 129, paymentMethod: "tarjeta", employeeId: 2 },
@@ -79,6 +89,29 @@ export const mockTodaySales: SaleRecord[] = [
   { id: 4, timestamp: new Date(Date.now() - 1000 * 60 * 90), customer: "Ana Martínez", items: [{ name: "Jabón Zote", quantity: 3, price: 18 }, { name: "Detergente Roma", quantity: 1, price: 42 }], total: 96, paymentMethod: "fiado", employeeId: 2 },
   { id: 5, timestamp: new Date(Date.now() - 1000 * 60 * 120), customer: "Cliente General", items: [{ name: "Aceite 1L", quantity: 1, price: 48 }, { name: "Galletas Marías", quantity: 2, price: 15 }], total: 78, paymentMethod: "efectivo", employeeId: 1 },
   { id: 6, timestamp: new Date(Date.now() - 1000 * 60 * 180), customer: "Laura Hernández", items: [{ name: "Leche Lala 1L", quantity: 3, price: 32 }], total: 96, paymentMethod: "tarjeta", employeeId: 4 },
+]
+
+/** Incluye ventas de días anteriores para probar el filtro "Solo hoy" */
+export const mockSalesHistoryExtended: SaleRecord[] = [
+  ...mockTodaySales,
+  {
+    id: 7,
+    timestamp: yesterdayAt(9, 15),
+    customer: "Roberto Sánchez",
+    items: [{ name: "Arroz 1kg", quantity: 4, price: 35 }],
+    total: 140,
+    paymentMethod: "efectivo",
+    employeeId: 1,
+  },
+  {
+    id: 8,
+    timestamp: yesterdayAt(16, 40),
+    customer: "Cliente General",
+    items: [{ name: "Coca-Cola 600ml", quantity: 6, price: 25 }],
+    total: 150,
+    paymentMethod: "tarjeta",
+    employeeId: 2,
+  },
 ]
 
 // Daily sales data for "hoy" filter

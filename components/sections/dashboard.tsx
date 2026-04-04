@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, Wallet, AlertCircle } from "lucide-react"
 import { mockSalesData, mockProducts, mockCustomers } from "@/lib/mock-data"
+import { formatQ, formatQChartTick } from "@/lib/currency"
 import {
   Area,
   AreaChart,
@@ -37,7 +38,7 @@ export function Dashboard() {
             <ShoppingBag className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-lg font-bold sm:text-2xl">${totalSales.toLocaleString()}</div>
+            <div className="text-lg font-bold sm:text-2xl">{formatQ(totalSales)}</div>
             <p className="flex items-center gap-1 text-xs text-primary">
               <TrendingUp className="h-3 w-3" />
               <span className="hidden sm:inline">+12.5% vs semana anterior</span>
@@ -54,7 +55,7 @@ export function Dashboard() {
             <Wallet className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-lg font-bold sm:text-2xl">${totalExpenses.toLocaleString()}</div>
+            <div className="text-lg font-bold sm:text-2xl">{formatQ(totalExpenses)}</div>
             <p className="flex items-center gap-1 text-xs text-muted-foreground">
               <TrendingDown className="h-3 w-3" />
               <span className="hidden sm:inline">-3.2% vs semana anterior</span>
@@ -71,7 +72,7 @@ export function Dashboard() {
             <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-lg font-bold text-primary sm:text-2xl">${balance.toLocaleString()}</div>
+            <div className="text-lg font-bold text-primary sm:text-2xl">{formatQ(balance)}</div>
             <p className="text-xs text-muted-foreground">
               <span className="hidden sm:inline">Ganancia neta esta semana</span>
               <span className="sm:hidden">Ganancia neta</span>
@@ -87,7 +88,7 @@ export function Dashboard() {
             <AlertCircle className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-lg font-bold text-amber-600 sm:text-2xl">${totalDebt.toLocaleString()}</div>
+            <div className="text-lg font-bold text-amber-600 sm:text-2xl">{formatQ(totalDebt)}</div>
             <p className="text-xs text-muted-foreground">
               {mockCustomers.filter(c => c.balance > 0).length} clientes
             </p>
@@ -130,7 +131,7 @@ export function Dashboard() {
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
                     }}
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Ventas']}
+                    formatter={(value: number) => [formatQ(value), "Ventas"]}
                   />
                   <Area
                     type="monotone"
@@ -187,10 +188,10 @@ export function Dashboard() {
         <CardContent>
           <div className="space-y-4">
             {[
-              { type: "sale", text: "Venta de $450 - María García", time: "Hace 5 min" },
-              { type: "payment", text: "Abono recibido de Ana Martínez - $500", time: "Hace 15 min" },
+              { type: "sale", text: `Venta de ${formatQ(450)} - María García`, time: "Hace 5 min" },
+              { type: "payment", text: `Abono recibido de Ana Martínez - ${formatQ(500)}`, time: "Hace 15 min" },
               { type: "stock", text: "Reposición de inventario - Coca-Cola 600ml", time: "Hace 1 hora" },
-              { type: "sale", text: "Venta de $280 - Cliente general", time: "Hace 2 horas" },
+              { type: "sale", text: `Venta de ${formatQ(280)} - Cliente general`, time: "Hace 2 horas" },
             ].map((activity, index) => (
               <div key={index} className="flex items-center gap-4">
                 <div className={`flex h-9 w-9 items-center justify-center rounded-full ${

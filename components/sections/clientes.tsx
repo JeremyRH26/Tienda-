@@ -12,8 +12,11 @@ import {
   Phone,
   Mail,
   ShoppingBag,
+  Pencil,
+  Trash2,
 } from "lucide-react"
 import { mockCustomers } from "@/lib/mock-data"
+import { formatQ } from "@/lib/currency"
 import {
   Dialog,
   DialogContent,
@@ -22,34 +25,97 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type Customer = typeof mockCustomers[0]
 
 export function Clientes() {
+  const [customers, setCustomers] = useState<Customer[]>(() =>
+    mockCustomers.map((c) => ({ ...c }))
+  )
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [showPayment, setShowPayment] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState("")
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null)
+  const [editForm, setEditForm] = useState({ name: "", phone: "", email: "" })
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     phone: "",
     email: "",
   })
 
-  const filteredCustomers = mockCustomers.filter(
+  const filteredCustomers = customers.filter(
     (customer) =>
       customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.phone.includes(searchTerm) ||
       customer.email.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const totalDebt = mockCustomers.reduce((acc, c) => acc + c.balance, 0)
-  const customersWithDebt = mockCustomers.filter((c) => c.balance > 0).length
+  const totalDebt = customers.reduce((acc, c) => acc + c.balance, 0)
+  const customersWithDebt = customers.filter((c) => c.balance > 0).length
 
   const handleAddCustomer = () => {
+    if (!newCustomer.name.trim()) return
+    const nextId = customers.length ? Math.max(...customers.map((c) => c.id)) + 1 : 1
+    setCustomers((prev) => [
+      ...prev,
+      {
+        id: nextId,
+        name: newCustomer.name.trim(),
+        phone: newCustomer.phone.trim() || "-",
+        email: newCustomer.email.trim() || "-",
+        balance: 0,
+        lastPurchase: "-",
+        totalPurchases: 0,
+      },
+    ])
     setShowAddCustomer(false)
     setNewCustomer({ name: "", phone: "", email: "" })
+  }
+
+  const openEdit = (c: Customer) => {
+    setEditingCustomer(c)
+    setEditForm({ name: c.name, phone: c.phone, email: c.email })
+  }
+
+  const saveEdit = () => {
+    if (!editingCustomer) return
+    const id = editingCustomer.id
+    setCustomers((prev) =>
+      prev.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              name: editForm.name.trim() || c.name,
+              phone: editForm.phone.trim() || c.phone,
+              email: editForm.email.trim() || c.email,
+            }
+          : c
+      )
+    )
+    setSelectedCustomer((cur) =>
+      cur?.id === id
+        ? {
+            ...cur,
+            name: editForm.name.trim() || cur.name,
+            phone: editForm.phone.trim() || cur.phone,
+            email: editForm.email.trim() || cur.email,
+          }
+        : cur
+    )
+    setEditingCustomer(null)
   }
 
   const handlePayment = () => {
@@ -131,7 +197,7 @@ export function Clientes() {
             </div>
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground sm:text-sm">Total Clientes</p>
-              <p className="text-lg font-bold sm:text-2xl">{mockCustomers.length}</p>
+              <p className="text-lg font-bold sm:text-2xl">{customers.length}</p>
             </div>
           </CardContent>
         </Card>
@@ -143,7 +209,7 @@ export function Clientes() {
             <div className="min-w-0">
               <p className="truncate text-xs text-muted-foreground sm:text-sm">Total por Cobrar</p>
               <p className="text-lg font-bold text-destructive sm:text-2xl">
-                ${totalDebt.toLocaleString()}
+                {formatQ(totalDebt)}
               </p>
             </div>
           </CardContent>
@@ -177,11 +243,36 @@ export function Clientes() {
         {filteredCustomers.map((customer) => (
           <Card
             key={customer.id}
-            className="cursor-pointer shadow-sm transition-all hover:shadow-md"
+            className="relative cursor-pointer shadow-sm transition-all hover:shadow-md"
             onClick={() => setSelectedCustomer(customer)}
           >
             <CardContent className="p-6">
-              <div className="mb-4 flex items-start justify-between">
+              <div
+                className="absolute right-2 top-2 flex gap-0.5"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  aria-label="Editar cliente"
+                  onClick={() => openEdit(customer)}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  aria-label="Eliminar cliente"
+                  onClick={() => setDeletingCustomer(customer)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="mb-4 flex items-start justify-between pr-14">
                 <div className="flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <span className="text-sm font-semibold">
@@ -224,7 +315,7 @@ export function Clientes() {
                       customer.balance > 0 ? "text-destructive" : "text-primary"
                     }`}
                   >
-                    ${customer.balance.toLocaleString()}
+                    {formatQ(customer.balance)}
                   </p>
                 </div>
                 {customer.balance > 0 && (
@@ -280,7 +371,7 @@ export function Clientes() {
                   <CardContent className="p-4">
                     <p className="text-xs text-muted-foreground">Total Compras</p>
                     <p className="text-xl font-bold">
-                      ${selectedCustomer.totalPurchases.toLocaleString()}
+                      {formatQ(selectedCustomer.totalPurchases)}
                     </p>
                   </CardContent>
                 </Card>
@@ -288,7 +379,7 @@ export function Clientes() {
                   <CardContent className="p-4">
                     <p className="text-xs text-muted-foreground">Saldo Deudor</p>
                     <p className={`text-xl font-bold ${selectedCustomer.balance > 0 ? "text-destructive" : "text-primary"}`}>
-                      ${selectedCustomer.balance.toLocaleString()}
+                      {formatQ(selectedCustomer.balance)}
                     </p>
                   </CardContent>
                 </Card>
@@ -340,7 +431,7 @@ export function Clientes() {
                 <p className="font-semibold">{selectedCustomer.name}</p>
                 <p className="mt-2 text-sm text-muted-foreground">Saldo Actual</p>
                 <p className="text-xl font-bold text-destructive">
-                  ${selectedCustomer.balance.toLocaleString()}
+                  {formatQ(selectedCustomer.balance)}
                 </p>
               </div>
 
@@ -351,7 +442,7 @@ export function Clientes() {
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   className="h-12 text-lg"
-                  placeholder="$0.00"
+                  placeholder="0.00"
                 />
               </div>
 
@@ -362,6 +453,72 @@ export function Clientes() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={editingCustomer !== null} onOpenChange={(open) => !open && setEditingCustomer(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar cliente</DialogTitle>
+            <DialogDescription>Modifica los datos del cliente.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nombre completo</label>
+              <Input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="h-12"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Teléfono</label>
+              <Input
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                className="h-12"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Correo</label>
+              <Input
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                className="h-12"
+              />
+            </div>
+            <Button className="h-12 w-full" onClick={saveEdit}>
+              Guardar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deletingCustomer !== null} onOpenChange={(open) => !open && setDeletingCustomer(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará {deletingCustomer?.name} del directorio. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingCustomer) {
+                  const id = deletingCustomer.id
+                  setCustomers((prev) => prev.filter((c) => c.id !== id))
+                  setSelectedCustomer((cur) => (cur?.id === id ? null : cur))
+                }
+                setDeletingCustomer(null)
+              }}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
