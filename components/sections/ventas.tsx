@@ -74,6 +74,46 @@ interface CartItem {
   quantity: number
 }
 
+/** Líneas de una venta que no coinciden con un producto del catálogo (se conservan al editar). */
+interface CustomCartLine {
+  name: string
+  quantity: number
+  price: number
+}
+
+function deserializeSaleToCart(sale: SaleRecord): {
+  cart: CartItem[]
+  customLines: CustomCartLine[]
+} {
+  const customLines: CustomCartLine[] = []
+  const byId = new Map<number, CartItem>()
+  for (const line of sale.items) {
+    const p = mockProducts.find((x) => x.name.trim() === line.name.trim())
+    if (p) {
+      const ex = byId.get(p.id)
+      if (ex) {
+        byId.set(p.id, { product: p, quantity: ex.quantity + line.quantity })
+      } else {
+        byId.set(p.id, { product: p, quantity: line.quantity })
+      }
+    } else {
+      customLines.push({
+        name: line.name.trim() || "Sin nombre",
+        quantity: line.quantity,
+        price: line.price,
+      })
+    }
+  }
+  return { cart: Array.from(byId.values()), customLines }
+}
+
+function customerSelectValueFromSaleName(name: string): string {
+  const t = name.trim()
+  if (!t || t === "Cliente General") return "general"
+  const c = mockCustomers.find((x) => x.name === t)
+  return c ? String(c.id) : "general"
+}
+
 function dateAtNoon(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)
 }
@@ -91,7 +131,7 @@ export function Ventas() {
   const [searchTerm, setSearchTerm] = useState("")
   const [cart, setCart] = useState<CartItem[]>([])
   const [showCheckout, setShowCheckout] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState<string>("")
+  const [selectedCustomer, setSelectedCustomer] = useState<string>("general")
   const [paymentMethod, setPaymentMethod] = useState<string>("efectivo")
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [salesHistory, setSalesHistory] = useState<SaleRecord[]>(() =>
@@ -108,12 +148,8 @@ export function Ventas() {
   const [showAbonoDetail, setShowAbonoDetail] = useState(false)
   const [saleToDelete, setSaleToDelete] = useState<SaleRecord | null>(null)
   const [editingSale, setEditingSale] = useState<SaleRecord | null>(null)
-  const [editSaleCustomer, setEditSaleCustomer] = useState("")
-  const [editSalePayment, setEditSalePayment] = useState<string>("efectivo")
-  const [editSaleItems, setEditSaleItems] = useState<
-    { name: string; quantity: number; price: number }[]
-  >([])
-  const [catalogPickerKey, setCatalogPickerKey] = useState(0)
+  const [customLines, setCustomLines] = useState<CustomCartLine[]>([])
+  const [activeTab, setActiveTab] = useState("pos")
   const [historyProductSearch, setHistoryProductSearch] = useState("")
 
   const filteredProducts = mockProducts.filter(
@@ -152,9 +188,14 @@ export function Ventas() {
     setCart((prev) => prev.filter((item) => item.product.id !== productId))
   }
 
-  const total = cart.reduce(
-    (acc, item) => acc + item.product.salePrice * item.quantity,
-    0
+  const total = useMemo(
+    () =>
+      cart.reduce(
+        (acc, item) => acc + item.product.salePrice * item.quantity,
+        0
+      ) +
+      customLines.reduce((acc, l) => acc + l.price * l.quantity, 0),
+    [cart, customLines]
   )
 
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0)
@@ -223,22 +264,102 @@ export function Ventas() {
   const nextSaleId = () =>
     salesHistory.length ? Math.max(...salesHistory.map((s) => s.id)) + 1 : 1
 
+  const buildCheckoutItems = () => [
+    ...cart.map((item) => ({
+      name: item.product.name,
+      quantity: item.quantity,
+      price: item.product.salePrice,
+    })),
+    ...customLines.map((l) => ({
+      name: l.name,
+      quantity: l.quantity,
+      price: l.price,
+    })),
+  ]
+
   const handleCheckout = () => {
-    const newSale: SaleRecord = {
-      id: nextSaleId(),
-      timestamp: new Date(),
-      customer: selectedCustomer ? mockCustomers.find(c => c.id.toString() === selectedCustomer)?.name || "Cliente General" : "Cliente General",
-      items: cart.map(item => ({ name: item.product.name, quantity: item.quantity, price: item.product.salePrice })),
-      total,
-      paymentMethod: paymentMethod as "efectivo" | "tarjeta" | "fiado",
-      employeeId: 1,
+    const items = buildCheckoutItems()
+    const computedTotal = items.reduce((a, row) => a + row.price * row.quantity, 0)
+    const customerName =
+      selectedCustomer && selectedCustomer !== "general"
+        ? mockCustomers.find((c) => c.id.toString() === selectedCustomer)?.name ??
+          "Cliente General"
+        : "Cliente General"
+
+    if (editingSale) {
+      const id = editingSale.id
+      setSalesHistory((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                customer: customerName,
+                paymentMethod: paymentMethod as SaleRecord["paymentMethod"],
+                items,
+                total: computedTotal,
+              }
+            : s
+        )
+      )
+      setSelectedSale((cur) =>
+        cur?.id === id
+          ? {
+              ...cur,
+              customer: customerName,
+              paymentMethod: paymentMethod as SaleRecord["paymentMethod"],
+              items,
+              total: computedTotal,
+            }
+          : cur
+      )
+      setEditingSale(null)
+    } else {
+      const newSale: SaleRecord = {
+        id: nextSaleId(),
+        timestamp: new Date(),
+        customer: customerName,
+        items,
+        total: computedTotal,
+        paymentMethod: paymentMethod as "efectivo" | "tarjeta" | "fiado",
+        employeeId: 1,
+      }
+      setSalesHistory([newSale, ...salesHistory])
     }
-    setSalesHistory([newSale, ...salesHistory])
+
     setCart([])
+    setCustomLines([])
     setShowCheckout(false)
-    setSelectedCustomer("")
+    setSelectedCustomer("general")
     setPaymentMethod("efectivo")
     setMobileCartOpen(false)
+  }
+
+  const startEditingSale = (sale: SaleRecord) => {
+    const { cart: nextCart, customLines: nextCustom } = deserializeSaleToCart(sale)
+    setEditingSale(sale)
+    setCart(nextCart)
+    setCustomLines(nextCustom)
+    setSelectedCustomer(customerSelectValueFromSaleName(sale.customer))
+    setPaymentMethod(sale.paymentMethod)
+    setActiveTab("pos")
+    setShowSaleDetail(false)
+    setSelectedSale(null)
+    setMobileCartOpen(false)
+    setShowCheckout(false)
+    setSearchTerm("")
+  }
+
+  const cancelEditingSale = () => {
+    setEditingSale(null)
+    setCart([])
+    setCustomLines([])
+    setSelectedCustomer("general")
+    setPaymentMethod("efectivo")
+    setShowCheckout(false)
+  }
+
+  const removeCustomLine = (index: number) => {
+    setCustomLines((prev) => prev.filter((_, i) => i !== index))
   }
 
   const formatTime = (date: Date) => {
@@ -280,7 +401,7 @@ export function Ventas() {
     <>
       {/* Cart Items */}
       <div className="flex-1 overflow-y-auto p-4">
-        {cart.length === 0 ? (
+        {cart.length === 0 && customLines.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
               <Search className="h-6 w-6 text-muted-foreground" />
@@ -338,6 +459,30 @@ export function Ventas() {
                 </div>
               </div>
             ))}
+            {customLines.map((line, idx) => (
+              <div
+                key={`custom-${idx}-${line.name}`}
+                className="flex items-center gap-3 rounded-lg border border-dashed bg-muted/30 p-3"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{line.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatQ(line.price)} c/u · fuera de catálogo
+                  </p>
+                </div>
+                <span className="text-sm font-medium tabular-nums">×{line.quantity}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+                  aria-label="Quitar línea"
+                  onClick={() => removeCustomLine(idx)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -352,10 +497,10 @@ export function Ventas() {
         </div>
         <Button
           className="h-12 w-full text-base"
-          disabled={cart.length === 0}
+          disabled={cart.length === 0 && customLines.length === 0}
           onClick={() => setShowCheckout(true)}
         >
-          Cobrar
+          {editingSale ? "Guardar cambios…" : "Cobrar"}
         </Button>
       </div>
     </>
@@ -363,7 +508,7 @@ export function Ventas() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <Tabs defaultValue="pos" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold text-foreground sm:text-2xl">Punto de Venta</h1>
@@ -383,7 +528,15 @@ export function Ventas() {
           </TabsList>
         </div>
 
-        <TabsContent value="pos" className="mt-4">
+        <TabsContent value="pos" className="mt-4 space-y-3">
+          {editingSale ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 dark:bg-amber-950/30">
+              <p className="text-sm font-medium">Editando venta #{editingSale.id}</p>
+              <Button type="button" variant="outline" size="sm" onClick={cancelEditingSale}>
+                Cancelar edición
+              </Button>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
             {/* Products Grid */}
             <div className="flex min-h-0 flex-1 flex-col space-y-4 overflow-hidden">
@@ -723,12 +876,7 @@ export function Ventas() {
                             size="icon"
                             className="h-8 w-8 text-muted-foreground"
                             aria-label="Editar venta"
-                            onClick={() => {
-                              setEditingSale(row.sale)
-                              setEditSaleCustomer(row.sale.customer)
-                              setEditSalePayment(row.sale.paymentMethod)
-                              setEditSaleItems(row.sale.items.map((i) => ({ ...i })))
-                            }}
+                            onClick={() => startEditingSale(row.sale)}
                           >
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -993,8 +1141,12 @@ export function Ventas() {
       <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Finalizar Venta</DialogTitle>
-            <DialogDescription>Selecciona el cliente y metodo de pago para completar la venta.</DialogDescription>
+            <DialogTitle>
+              {editingSale ? `Guardar venta #${editingSale.id}` : "Finalizar Venta"}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {editingSale ? "Cliente y método de pago" : "Cliente y método de pago"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             {/* Customer Selection */}
@@ -1049,257 +1201,23 @@ export function Ventas() {
             {/* Total */}
             <div className="rounded-lg bg-muted p-4">
               <div className="flex items-center justify-between">
-                <span className="font-medium">Total a Cobrar</span>
+                <span className="font-medium">
+                  {editingSale ? "Total de la venta" : "Total a Cobrar"}
+                </span>
                 <span className="text-2xl font-bold text-primary">
                   {formatQ(total)}
                 </span>
               </div>
             </div>
 
-            <Button className="h-12 w-full text-base" onClick={handleCheckout}>
-              Confirmar Venta
+            <Button
+              className="h-12 w-full text-base"
+              disabled={cart.length === 0 && customLines.length === 0}
+              onClick={handleCheckout}
+            >
+              {editingSale ? "Guardar cambios" : "Confirmar Venta"}
             </Button>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={editingSale !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditingSale(null)
-            setEditSaleItems([])
-          }
-        }}
-      >
-        <DialogContent className="flex max-h-[90vh] max-w-lg flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
-          <DialogHeader className="shrink-0 border-b px-6 py-4">
-            <DialogTitle>Editar venta</DialogTitle>
-            <DialogDescription>
-              Modifica productos, cantidades, precios, cliente y método de pago. El total se recalcula
-              automáticamente.
-            </DialogDescription>
-          </DialogHeader>
-          {editingSale && (
-            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-6 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Cliente</label>
-                <Input
-                  value={editSaleCustomer}
-                  onChange={(e) => setEditSaleCustomer(e.target.value)}
-                  className="h-11"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Método de pago</label>
-                <Select value={editSalePayment} onValueChange={setEditSalePayment}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="efectivo">Efectivo</SelectItem>
-                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
-                    <SelectItem value="fiado">Fiado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                  <label className="text-sm font-medium">Productos</label>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() =>
-                        setEditSaleItems((prev) => [
-                          ...prev,
-                          { name: "", quantity: 1, price: 0 },
-                        ])
-                      }
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Línea vacía
-                    </Button>
-                    <Select
-                      key={catalogPickerKey}
-                      onValueChange={(productId) => {
-                        const p = mockProducts.find((x) => x.id.toString() === productId)
-                        if (p) {
-                          setEditSaleItems((prev) => [
-                            ...prev,
-                            { name: p.name, quantity: 1, price: p.salePrice },
-                          ])
-                          setCatalogPickerKey((k) => k + 1)
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-8 w-[200px] text-xs sm:h-9 sm:text-sm">
-                        <SelectValue placeholder="Del catálogo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {mockProducts.map((p) => (
-                          <SelectItem key={p.id} value={p.id.toString()}>
-                            {p.name} — {formatQ(p.salePrice)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {editSaleItems.map((line, idx) => {
-                    const sub = (line.quantity || 0) * (line.price || 0)
-                    return (
-                      <div
-                        key={idx}
-                        className="rounded-lg border bg-card p-3 shadow-sm"
-                      >
-                        <div className="mb-2 grid gap-2 sm:grid-cols-[1fr_88px_100px_auto] sm:items-end">
-                          <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground">Producto</span>
-                            <Input
-                              value={line.name}
-                              onChange={(e) =>
-                                setEditSaleItems((prev) =>
-                                  prev.map((row, i) =>
-                                    i === idx ? { ...row, name: e.target.value } : row
-                                  )
-                                )
-                              }
-                              placeholder="Nombre"
-                              className="h-10"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground">Cant.</span>
-                            <Input
-                              type="number"
-                              min={1}
-                              value={line.quantity || ""}
-                              onChange={(e) => {
-                                const v = parseInt(e.target.value, 10)
-                                setEditSaleItems((prev) =>
-                                  prev.map((row, i) =>
-                                    i === idx
-                                      ? { ...row, quantity: Number.isFinite(v) ? Math.max(0, v) : 0 }
-                                      : row
-                                  )
-                                )
-                              }}
-                              className="h-10"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <span className="text-xs text-muted-foreground">P. unit.</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={line.price || ""}
-                              onChange={(e) => {
-                                const v = parseFloat(e.target.value)
-                                setEditSaleItems((prev) =>
-                                  prev.map((row, i) =>
-                                    i === idx
-                                      ? { ...row, price: Number.isFinite(v) ? Math.max(0, v) : 0 }
-                                      : row
-                                  )
-                                )
-                              }}
-                              className="h-10"
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-10 w-10 shrink-0 text-destructive hover:text-destructive"
-                            aria-label="Quitar línea"
-                            onClick={() =>
-                              setEditSaleItems((prev) => prev.filter((_, i) => i !== idx))
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <p className="text-right text-sm text-muted-foreground">
-                          Subtotal: <span className="font-semibold text-foreground">{formatQ(sub)}</span>
-                        </p>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {editSaleItems.length === 0 && (
-                  <p className="rounded-md border border-dashed p-3 text-center text-sm text-muted-foreground">
-                    Agrega al menos un producto con el catálogo o una línea vacía.
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between rounded-lg bg-primary/10 px-4 py-3">
-                  <span className="font-medium">Total venta</span>
-                  <span className="text-lg font-bold text-primary">
-                    {formatQ(
-                      editSaleItems.reduce(
-                        (acc, row) => acc + (row.quantity || 0) * (row.price || 0),
-                        0
-                      )
-                    )}
-                  </span>
-                </div>
-              </div>
-
-              <Button
-                className="h-11 w-full shrink-0"
-                disabled={
-                  !editSaleItems.some((row) => row.name.trim() && row.quantity > 0)
-                }
-                onClick={() => {
-                  const id = editingSale.id
-                  const items = editSaleItems
-                    .filter((row) => row.name.trim() && row.quantity > 0)
-                    .map((row) => ({
-                      name: row.name.trim(),
-                      quantity: Math.max(1, Math.floor(row.quantity)),
-                      price: row.price,
-                    }))
-                  const newTotal = items.reduce((a, row) => a + row.price * row.quantity, 0)
-                  setSalesHistory((prev) =>
-                    prev.map((s) =>
-                      s.id === id
-                        ? {
-                            ...s,
-                            customer: editSaleCustomer.trim() || s.customer,
-                            paymentMethod: editSalePayment as SaleRecord["paymentMethod"],
-                            items,
-                            total: newTotal,
-                          }
-                        : s
-                    )
-                  )
-                  setSelectedSale((cur) =>
-                    cur?.id === id
-                      ? {
-                          ...cur,
-                          customer: editSaleCustomer.trim() || cur.customer,
-                          paymentMethod: editSalePayment as SaleRecord["paymentMethod"],
-                          items,
-                          total: newTotal,
-                        }
-                      : cur
-                  )
-                  setEditingSale(null)
-                  setEditSaleItems([])
-                }}
-              >
-                Guardar cambios
-              </Button>
-            </div>
-          )}
         </DialogContent>
       </Dialog>
 
@@ -1322,6 +1240,9 @@ export function Ventas() {
                   if (selectedSale?.id === id) {
                     setSelectedSale(null)
                     setShowSaleDetail(false)
+                  }
+                  if (editingSale?.id === id) {
+                    cancelEditingSale()
                   }
                 }
                 setSaleToDelete(null)
