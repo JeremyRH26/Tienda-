@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, TrendingDown, Calendar } from "lucide-react"
+import { TrendingUp, TrendingDown, Calendar, Wallet } from "lucide-react"
+import { useBusiness } from "@/lib/business-context"
 import {
   mockSalesData,
   mockMonthlySales,
@@ -27,8 +28,20 @@ type ReportPeriod = "diario" | "semanal" | "mensual" | "anual"
 
 type ChartRow = { label: string; sales: number; expenses: number }
 
+function sameCalendarMonth(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth()
+}
+
 export function Reportes() {
+  const { expenses } = useBusiness()
   const [period, setPeriod] = useState<ReportPeriod>("semanal")
+
+  const registeredExpensesMonth = useMemo(() => {
+    const now = new Date()
+    return expenses
+      .filter((e) => sameCalendarMonth(e.date, now))
+      .reduce((acc, e) => acc + e.amount, 0)
+  }, [expenses])
 
   const chartRows: ChartRow[] = useMemo(() => {
     switch (period) {
@@ -145,7 +158,7 @@ export function Reportes() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
         <Card className="shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -173,7 +186,7 @@ export function Reportes() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
-                  Gastos {pl.gastos}
+                  Gastos {pl.gastos} (gráfico)
                 </p>
                 <p className="text-2xl font-bold">
                   {formatQ(currentExpenses)}
@@ -185,7 +198,29 @@ export function Reportes() {
             </div>
             <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
               <TrendingDown className="h-3 w-3" />
-              -3.2% vs periodo anterior
+              Referencia del periodo seleccionado
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm ring-1 ring-primary/20">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Gastos registrados (módulo)
+                </p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatQ(registeredExpensesMonth)}
+                </p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15">
+                <Wallet className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Total del mes en curso capturado en{" "}
+              <span className="font-medium text-foreground">Gastos</span>
             </p>
           </CardContent>
         </Card>

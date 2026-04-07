@@ -17,6 +17,26 @@ export type AbonoEntry = {
   amount: number
 }
 
+export type ExpenseCategoryId =
+  | "servicios_publicos"
+  | "compra_insumos"
+  | "arriendo"
+  | "nomina"
+  | "administrativos"
+  | "transporte_logistica"
+  | "muebles_equipo"
+  | "otros"
+
+export type ExpenseEntry = {
+  id: string
+  date: Date
+  category: ExpenseCategoryId
+  amount: number
+  paymentMethod: "efectivo" | "transferencia"
+  note: string
+  createdAt: Date
+}
+
 type BusinessContextValue = {
   abonos: AbonoEntry[]
   registerAbono: (entry: {
@@ -25,14 +45,25 @@ type BusinessContextValue = {
     amount: number
     timestamp?: Date
   }) => void
+  expenses: ExpenseEntry[]
+  registerExpense: (entry: {
+    date: Date
+    category: ExpenseCategoryId
+    amount: number
+    paymentMethod: "efectivo" | "transferencia"
+    note: string
+  }) => void
+  removeExpense: (id: string) => void
 }
 
 const BusinessContext = createContext<BusinessContextValue | null>(null)
 
 let abonoSeq = 0
+let expenseSeq = 0
 
 export function BusinessProvider({ children }: { children: ReactNode }) {
   const [abonos, setAbonos] = useState<AbonoEntry[]>([])
+  const [expenses, setExpenses] = useState<ExpenseEntry[]>([])
 
   const registerAbono = useCallback(
     (entry: {
@@ -57,9 +88,46 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     []
   )
 
+  const registerExpense = useCallback(
+    (entry: {
+      date: Date
+      category: ExpenseCategoryId
+      amount: number
+      paymentMethod: "efectivo" | "transferencia"
+      note: string
+    }) => {
+      expenseSeq += 1
+      const id = `gasto-${Date.now()}-${expenseSeq}`
+      const now = new Date()
+      setExpenses((prev) => [
+        {
+          id,
+          date: entry.date,
+          category: entry.category,
+          amount: Math.round(entry.amount * 100) / 100,
+          paymentMethod: entry.paymentMethod,
+          note: entry.note.trim(),
+          createdAt: now,
+        },
+        ...prev,
+      ])
+    },
+    []
+  )
+
+  const removeExpense = useCallback((id: string) => {
+    setExpenses((prev) => prev.filter((e) => e.id !== id))
+  }, [])
+
   const value = useMemo(
-    () => ({ abonos, registerAbono }),
-    [abonos, registerAbono]
+    () => ({
+      abonos,
+      registerAbono,
+      expenses,
+      registerExpense,
+      removeExpense,
+    }),
+    [abonos, registerAbono, expenses, registerExpense, removeExpense]
   )
 
   return (

@@ -205,7 +205,15 @@ export const mockSuppliers = [
   { id: 5, name: "PepsiCo", contact: "Ricardo Vega", phone: "555-5555", email: "dist@pepsico.com", products: ["Sabritas", "Pepsi", "Gatorade"], pendingPayment: 12300, nextPayment: "2024-01-30" },
 ]
 
-export type ModulePermission = "dashboard" | "ventas" | "inventario" | "clientes" | "proveedores" | "equipo" | "reportes"
+export type ModulePermission =
+  | "dashboard"
+  | "ventas"
+  | "inventario"
+  | "clientes"
+  | "proveedores"
+  | "equipo"
+  | "reportes"
+  | "gastos"
 
 export const allModules: { id: ModulePermission; label: string }[] = [
   { id: "dashboard", label: "Dashboard" },
@@ -213,6 +221,7 @@ export const allModules: { id: ModulePermission; label: string }[] = [
   { id: "inventario", label: "Inventario" },
   { id: "clientes", label: "Clientes" },
   { id: "proveedores", label: "Proveedores" },
+  { id: "gastos", label: "Gastos" },
   { id: "equipo", label: "Equipo" },
   { id: "reportes", label: "Reportes" },
 ]
@@ -230,10 +239,39 @@ export interface Employee {
 }
 
 export const mockEmployees: Employee[] = [
-  { id: 1, name: "Juan Díaz", role: "admin", username: "juan.admin", password: "Admin2024!", phone: "555-0001", status: "active", shift: "Matutino", permissions: ["dashboard", "ventas", "inventario", "clientes", "proveedores", "equipo", "reportes"] },
+  {
+    id: 1,
+    name: "Juan Díaz",
+    role: "admin",
+    username: "juan.admin",
+    password: "Admin2024!",
+    phone: "555-0001",
+    status: "active",
+    shift: "Matutino",
+    permissions: [
+      "dashboard",
+      "ventas",
+      "inventario",
+      "clientes",
+      "proveedores",
+      "gastos",
+      "equipo",
+      "reportes",
+    ],
+  },
   { id: 2, name: "María Flores", role: "cajero", username: "maria.caja", password: "Caja2024!", phone: "555-0002", status: "active", shift: "Vespertino", permissions: ["dashboard", "ventas", "clientes"] },
   { id: 3, name: "Pedro Gómez", role: "cajero", username: "pedro.caja", password: "Pedro2024!", phone: "555-0003", status: "inactive", shift: "Nocturno", permissions: ["ventas"] },
-  { id: 4, name: "Ana Morales", role: "cajero", username: "ana.caja", password: "Ana2024!", phone: "555-0004", status: "active", shift: "Matutino", permissions: ["dashboard", "ventas", "inventario", "clientes"] },
+  {
+    id: 4,
+    name: "Ana Morales",
+    role: "cajero",
+    username: "ana.caja",
+    password: "Ana2024!",
+    phone: "555-0004",
+    status: "active",
+    shift: "Matutino",
+    permissions: ["dashboard", "ventas", "inventario", "clientes", "gastos"],
+  },
 ]
 
 export interface SaleRecord {

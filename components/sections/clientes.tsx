@@ -425,13 +425,14 @@ export function Clientes() {
         open={selectedCustomer !== null && !showPayment}
         onOpenChange={(open) => !open && setSelectedCustomer(null)}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="!flex max-h-[min(90vh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="shrink-0 border-b px-6 pb-4 pt-6 pr-14">
             <DialogTitle>Perfil del Cliente</DialogTitle>
             <DialogDescription>Información detallada y estado de cuenta del cliente.</DialogDescription>
           </DialogHeader>
           {selectedCustomer && (
-            <div className="space-y-6 py-4">
+            <>
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-6 py-4">
               <div className="flex items-center gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <span className="text-xl font-semibold">
@@ -513,7 +514,7 @@ export function Clientes() {
                       Generar PDF
                     </Button>
                   </div>
-                  <div className="max-h-[min(24rem,55vh)] space-y-4 overflow-y-auto pr-1">
+                  <div className="max-h-[min(20rem,40vh)] space-y-4 overflow-y-auto rounded-md border border-border/60 bg-muted/20 p-2 pr-1">
                     {selectedCustomer.pendingCreditLines.map((line) => (
                       <div
                         key={line.id}
@@ -592,8 +593,10 @@ export function Clientes() {
                   </Button>
                 </div>
               )}
+            </div>
 
-              {selectedCustomer.balance > 0 && (
+            {selectedCustomer.balance > 0 && (
+              <div className="shrink-0 border-t bg-background px-6 py-4 shadow-[0_-8px_24px_-8px_rgba(0,0,0,0.12)]">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     type="button"
@@ -621,8 +624,9 @@ export function Clientes() {
                     Registrar abono
                   </Button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+            </>
           )}
         </DialogContent>
       </Dialog>

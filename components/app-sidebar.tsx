@@ -10,23 +10,36 @@ import {
   BarChart3,
   ChevronLeft,
   Store,
+  Wallet,
+  LogOut,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import type { ModulePermission } from "@/lib/mock-data"
 
 interface AppSidebarProps {
   activeSection: string
   onSectionChange: (section: string) => void
   collapsed: boolean
   onToggleCollapse: () => void
+  permissions: ModulePermission[]
+  userDisplayName: string
+  userRoleLabel: string
+  userInitials: string
+  onLogout: () => void
 }
 
-const navItems = [
+const navItems: {
+  id: ModulePermission
+  label: string
+  icon: typeof LayoutDashboard
+}[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "ventas", label: "Ventas/POS", icon: ShoppingCart },
   { id: "inventario", label: "Inventario", icon: Package },
   { id: "clientes", label: "Clientes", icon: Users },
   { id: "proveedores", label: "Proveedores", icon: Truck },
+  { id: "gastos", label: "Gastos", icon: Wallet },
   { id: "equipo", label: "Equipo", icon: UserCog },
   { id: "reportes", label: "Reportes", icon: BarChart3 },
 ]
@@ -36,7 +49,14 @@ export function AppSidebar({
   onSectionChange,
   collapsed,
   onToggleCollapse,
+  permissions,
+  userDisplayName,
+  userRoleLabel,
+  userInitials,
+  onLogout,
 }: AppSidebarProps) {
+  const visible = navItems.filter((item) => permissions.includes(item.id))
+
   return (
     <aside
       className={cn(
@@ -44,7 +64,6 @@ export function AppSidebar({
         collapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Header */}
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
@@ -71,14 +90,14 @@ export function AppSidebar({
         </Button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 p-3">
-        {navItems.map((item) => {
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        {visible.map((item) => {
           const Icon = item.icon
           const isActive = activeSection === item.id
           return (
             <button
               key={item.id}
+              type="button"
               onClick={() => onSectionChange(item.id)}
               className={cn(
                 "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors",
@@ -95,18 +114,44 @@ export function AppSidebar({
         })}
       </nav>
 
-      {/* Footer */}
       {!collapsed && (
         <div className="border-t border-sidebar-border p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <span className="text-sm font-medium">JD</span>
+          <div className="mb-3 flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <span className="text-sm font-medium">{userInitials}</span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-sidebar-foreground">Juan Díaz</span>
-              <span className="text-xs text-muted-foreground">Administrador</span>
+            <div className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium text-sidebar-foreground">
+                {userDisplayName}
+              </span>
+              <span className="text-xs text-muted-foreground">{userRoleLabel}</span>
             </div>
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-9 w-full gap-2 border-sidebar-border text-sidebar-foreground"
+            onClick={onLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesión
+          </Button>
+        </div>
+      )}
+
+      {collapsed && (
+        <div className="border-t border-sidebar-border p-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 text-sidebar-foreground"
+            title="Cerrar sesión"
+            onClick={onLogout}
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
         </div>
       )}
     </aside>
