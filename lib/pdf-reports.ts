@@ -1,5 +1,11 @@
 import { formatQ } from "@/lib/currency"
 import type { PendingCreditLine, SaleRecord } from "@/lib/mock-data"
+import {
+  reportPeriodTitle,
+  type ReportChartRow,
+  type ReportPeriodUi,
+  type ReportSummary,
+} from "@/lib/report-metrics"
 import { aggregateProfitForSales, type CatalogProduct } from "@/lib/sale-profit"
 import { salesPeriodLabel, type SalesPrintPeriod } from "@/lib/sales-period"
 
@@ -247,4 +253,73 @@ export async function downloadCustomerCreditPdf(
   }
 
   doc.save(`fiados-${customerName.replace(/\s+/g, "-").slice(0, 40)}.pdf`)
+}
+
+export async function downloadBusinessReportPdf(
+  summary: ReportSummary,
+  rows: ReportChartRow[],
+  period: ReportPeriodUi,
+  generatedAt: Date = new Date()
+) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
+  doc.setFontSize(16)
+  doc.text("Reporte de rendimiento — MiniMer", 14, 16)
+  doc.setFontSize(9)
+  doc.setTextColor(80, 80, 80)
+  doc.text(
+    `${reportPeriodTitle(period)} · ${summary.periodCaption}`,
+    14,
+    23
+  )
+  doc.text(`Generado: ${generatedAt.toLocaleString("es-GT")}`, 14, 28)
+  doc.setTextColor(0, 0, 0)
+
+  autoTable(doc, {
+    startY: 33,
+    body: [
+      ["Ventas cobradas", formatQ(summary.totalCobrado)],
+      ["Costo inventario (ventas cobradas)", formatQ(summary.totalCosto)],
+      ["Ganancia bruta ventas", formatQ(summary.totalMargen)],
+      ["Gastos registrados", formatQ(summary.totalGastos)],
+      ["Abonos recibidos", formatQ(summary.totalAbonos)],
+      ["Ventas al fiado (monto)", formatQ(summary.totalFiado)],
+      ["Movimientos de venta (total)", String(summary.countVentas)],
+      ["Ventas al fiado (cantidad)", String(summary.countFiado)],
+      ["Resultado (ganancia − gastos)", formatQ(summary.resultadoOperativo)],
+    ],
+    styles: { fontSize: 9, cellPadding: 1.5 },
+    columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+    theme: "plain",
+    margin: { left: 14, right: 14 },
+  })
+
+  const ext = doc as { lastAutoTable?: { finalY: number } }
+  const afterSummary = (ext.lastAutoTable?.finalY ?? 80) + 10
+  doc.setFontSize(11)
+  doc.text("Desglose", 14, afterSummary)
+
+  autoTable(doc, {
+    startY: afterSummary + 4,
+    head: [["Periodo / hora", "Ventas", "Gastos", "Ganancia", "Margen %"]],
+    body: rows.map((r) => {
+      const profit = r.sales - r.expenses
+      const marginPct =
+        r.sales > 0 ? `${((profit / r.sales) * 100).toFixed(1)}%` : "—"
+      return [
+        r.label,
+        formatQ(r.sales),
+        formatQ(r.expenses),
+        formatQ(profit),
+        marginPct,
+      ]
+    }),
+    styles: { fontSize: 8, cellPadding: 1.5 },
+    headStyles: { fillColor: [41, 41, 41], textColor: 255 },
+    margin: { left: 14, right: 14 },
+  })
+
+  doc.save(
+    `reporte-rendimiento-${period}-${generatedAt.toISOString().slice(0, 10)}.pdf`
+  )
 }
