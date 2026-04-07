@@ -16,6 +16,13 @@ export const mockProducts = [
   { id: 10, name: "Detergente Roma", category: "Limpieza", costPrice: 30, salePrice: 42, stock: 18, minStock: 10, supplier: "Distribuidora Norte", image: productPhoto("tienda-detergente-10") },
 ]
 
+/** Productos llevados en una venta al fiado (detalle del historial) */
+export type CreditLineItem = {
+  name: string
+  quantity: number
+  price: number
+}
+
 /** Líneas de fiado / ventas a crédito que componen la deuda pendiente del cliente */
 export type PendingCreditLine = {
   id: string
@@ -23,6 +30,7 @@ export type PendingCreditLine = {
   descripcion: string
   totalOriginal: number
   saldoPendiente: number
+  items: CreditLineItem[]
 }
 
 export type ShopCustomer = {
@@ -49,16 +57,27 @@ export const mockCustomers: ShopCustomer[] = [
       {
         id: "mg-1",
         fecha: "12/03/2026",
-        descripcion: "Fiado — Abarrotes y bebidas",
+        descripcion: "Venta al fiado — Abarrotes y bebidas",
         totalOriginal: 280,
         saldoPendiente: 200,
+        items: [
+          { name: "Leche Lala 1L", quantity: 3, price: 32 },
+          { name: "Aceite 1L", quantity: 2, price: 48 },
+          { name: "Sabritas Original", quantity: 4, price: 22 },
+        ],
       },
       {
         id: "mg-2",
         fecha: "28/02/2026",
-        descripcion: "Fiado — Lácteos y pan",
-        totalOriginal: 250,
-        saldoPendiente: 250,
+        descripcion: "Venta al fiado — Lácteos y pan",
+        totalOriginal: 237,
+        saldoPendiente: 237,
+        items: [
+          { name: "Pan Bimbo Grande", quantity: 1, price: 65 },
+          { name: "Leche Lala 1L", quantity: 2, price: 32 },
+          { name: "Huevos Docena", quantity: 1, price: 58 },
+          { name: "Coca-Cola 600ml", quantity: 2, price: 25 },
+        ],
       },
     ],
   },
@@ -84,16 +103,26 @@ export const mockCustomers: ShopCustomer[] = [
       {
         id: "am-1",
         fecha: "08/03/2026",
-        descripcion: "Fiado — Limpieza y snacks",
+        descripcion: "Venta al fiado — Despensa",
         totalOriginal: 600,
         saldoPendiente: 600,
+        items: [
+          { name: "Arroz 1kg", quantity: 10, price: 35 },
+          { name: "Coca-Cola 600ml", quantity: 10, price: 25 },
+        ],
       },
       {
         id: "am-2",
         fecha: "01/03/2026",
-        descripcion: "Fiado — Canasta básica",
+        descripcion: "Venta al fiado — Canasta básica",
         totalOriginal: 650,
         saldoPendiente: 650,
+        items: [
+          { name: "Arroz 1kg", quantity: 6, price: 35 },
+          { name: "Aceite 1L", quantity: 4, price: 48 },
+          { name: "Huevos Docena", quantity: 3, price: 58 },
+          { name: "Coca-Cola 600ml", quantity: 8, price: 25 },
+        ],
       },
     ],
   },
@@ -119,9 +148,15 @@ export const mockCustomers: ShopCustomer[] = [
       {
         id: "lh-1",
         fecha: "10/03/2026",
-        descripcion: "Fiado — Compra general",
+        descripcion: "Venta al fiado — Compra general",
         totalOriginal: 780,
         saldoPendiente: 780,
+        items: [
+          { name: "Leche Lala 1L", quantity: 6, price: 32 },
+          { name: "Pan Bimbo Grande", quantity: 2, price: 65 },
+          { name: "Arroz 1kg", quantity: 4, price: 35 },
+          { name: "Jabón Zote", quantity: 5, price: 18 },
+        ],
       },
     ],
   },
@@ -137,16 +172,26 @@ export const mockCustomers: ShopCustomer[] = [
       {
         id: "pr-1",
         fecha: "05/03/2026",
-        descripcion: "Fiado — Mayoreo abarrotes",
+        descripcion: "Venta al fiado — Mayoreo abarrotes",
         totalOriginal: 1100,
         saldoPendiente: 1100,
+        items: [
+          { name: "Arroz 1kg", quantity: 12, price: 35 },
+          { name: "Aceite 1L", quantity: 6, price: 48 },
+          { name: "Frijol (referencia)", quantity: 10, price: 35 },
+        ],
       },
       {
         id: "pr-2",
         fecha: "25/02/2026",
-        descripcion: "Fiado — Bebidas y snacks",
+        descripcion: "Venta al fiado — Bebidas y snacks",
         totalOriginal: 1000,
         saldoPendiente: 1000,
+        items: [
+          { name: "Coca-Cola 600ml", quantity: 20, price: 25 },
+          { name: "Sabritas Original", quantity: 15, price: 22 },
+          { name: "Galletas Marías", quantity: 10, price: 15 },
+        ],
       },
     ],
   },
