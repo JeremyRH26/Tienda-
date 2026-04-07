@@ -15,11 +15,11 @@ import {
   TrendingUp,
   Pencil,
   Trash2,
-  Printer,
+  FileDown,
 } from "lucide-react"
 import { mockProducts, categories } from "@/lib/mock-data"
 import { formatQ } from "@/lib/currency"
-import { printInventoryReport } from "@/lib/print"
+import { downloadInventoryPdf } from "@/lib/pdf-reports"
 import {
   Dialog,
   DialogContent,
@@ -197,11 +197,11 @@ export function Inventario() {
             type="button"
             variant="outline"
             className="h-11 gap-2 sm:h-12 sm:px-6"
-            onClick={() => printInventoryReport(products)}
+            onClick={() => downloadInventoryPdf(products)}
           >
-            <Printer className="h-4 w-4" />
-            <span className="hidden sm:inline">Imprimir inventario</span>
-            <span className="sm:hidden">Imprimir</span>
+            <FileDown className="h-4 w-4" />
+            <span className="hidden sm:inline">Generar PDF inventario</span>
+            <span className="sm:hidden">PDF</span>
           </Button>
         <Dialog open={showAddProduct} onOpenChange={setShowAddProduct}>
           <DialogTrigger asChild>

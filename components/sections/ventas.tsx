@@ -4,12 +4,12 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Plus, Minus, Trash2, CreditCard, Banknote, User, ShoppingCart, Receipt, Clock, Eye, Pencil, CalendarDays, List, Printer, Landmark } from "lucide-react"
+import { Search, Plus, Minus, Trash2, CreditCard, Banknote, User, ShoppingCart, Receipt, Clock, Eye, Pencil, CalendarDays, List, FileDown, Landmark, Coins } from "lucide-react"
 import { mockProducts, mockCustomers, mockSalesHistoryExtended, type SaleRecord } from "@/lib/mock-data"
 import { formatQ, isSameCalendarDay } from "@/lib/currency"
 import { useBusiness } from "@/lib/business-context"
 import { filterSalesByPeriod, type SalesPrintPeriod } from "@/lib/sales-period"
-import { printSalesList, printSaleReceipt } from "@/lib/print"
+import { downloadSalesListPdf, downloadSaleReceiptPdf } from "@/lib/pdf-reports"
 import {
   Dialog,
   DialogContent,
@@ -165,9 +165,6 @@ export function Ventas() {
   const ventasHoy = salesHistory.filter((s) => isSameCalendarDay(s.timestamp, now))
   const recaudadoVentasHoy = ventasHoy
     .filter((s) => s.paymentMethod === "efectivo" || s.paymentMethod === "tarjeta")
-    .reduce((acc, s) => acc + s.total, 0)
-  const fiadosRegistradosHoy = ventasHoy
-    .filter((s) => s.paymentMethod === "fiado")
     .reduce((acc, s) => acc + s.total, 0)
   const abonosRecibidosHoy = abonos
     .filter((a) => isSameCalendarDay(a.timestamp, now))
@@ -404,43 +401,6 @@ export function Ventas() {
         </TabsContent>
 
         <TabsContent value="history" className="mt-4 space-y-4">
-          <Card className="border-primary/20 bg-primary/5 shadow-sm">
-            <CardHeader className="pb-2 pt-4">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Landmark className="h-4 w-4" />
-                Movimiento del día (hoy)
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Dinero cobrado en ventas (efectivo/tarjeta), total fiado registrado y abonos de clientes.
-              </p>
-            </CardHeader>
-            <CardContent className="pb-4">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="rounded-lg border bg-card/80 p-3">
-                  <p className="text-xs text-muted-foreground">Recaudado en ventas</p>
-                  <p className="text-lg font-bold text-primary sm:text-xl">
-                    {formatQ(recaudadoVentasHoy)}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground sm:text-xs">Efectivo y tarjeta</p>
-                </div>
-                <div className="rounded-lg border bg-card/80 p-3">
-                  <p className="text-xs text-muted-foreground">Fiados registrados hoy</p>
-                  <p className="text-lg font-bold text-amber-600 sm:text-xl">
-                    {formatQ(fiadosRegistradosHoy)}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground sm:text-xs">Ventas al crédito</p>
-                </div>
-                <div className="rounded-lg border bg-card/80 p-3">
-                  <p className="text-xs text-muted-foreground">Abonos recibidos</p>
-                  <p className="text-lg font-bold text-emerald-600 sm:text-xl">
-                    {formatQ(abonosRecibidosHoy)}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground sm:text-xs">Desde clientes</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
             <p className="text-sm text-muted-foreground">
               {salesDayFilter === "today"
@@ -474,13 +434,13 @@ export function Ventas() {
                 onValueChange={(v) => setSalesPrintPeriod(v as SalesPrintPeriod)}
               >
                 <SelectTrigger className="h-9 w-[130px]">
-                  <SelectValue placeholder="Periodo impresión" />
+                  <SelectValue placeholder="Periodo PDF" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="day">Imprimir: día</SelectItem>
-                  <SelectItem value="week">Imprimir: semana</SelectItem>
-                  <SelectItem value="month">Imprimir: mes</SelectItem>
-                  <SelectItem value="year">Imprimir: año</SelectItem>
+                  <SelectItem value="day">PDF: día</SelectItem>
+                  <SelectItem value="week">PDF: semana</SelectItem>
+                  <SelectItem value="month">PDF: mes</SelectItem>
+                  <SelectItem value="year">PDF: año</SelectItem>
                 </SelectContent>
               </Select>
               <Button
@@ -490,16 +450,16 @@ export function Ventas() {
                 className="gap-2"
                 onClick={() => {
                   const list = filterSalesByPeriod(salesHistory, salesPrintPeriod, now)
-                  printSalesList(list, salesPrintPeriod, now)
+                  downloadSalesListPdf(list, salesPrintPeriod, now)
                 }}
               >
-                <Printer className="h-4 w-4" />
-                Imprimir ventas
+                <FileDown className="h-4 w-4" />
+                Generar PDF ventas
               </Button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
             <Card className="shadow-sm">
               <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
@@ -526,7 +486,7 @@ export function Ventas() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="col-span-2 shadow-sm sm:col-span-1">
+            <Card className="shadow-sm">
               <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30 sm:h-12 sm:w-12">
                   <User className="h-5 w-5 text-amber-600 sm:h-6 sm:w-6" />
@@ -538,6 +498,36 @@ export function Ventas() {
                   <p className="text-lg font-bold text-amber-600 sm:text-2xl">
                     {formatQ(fiadosPeriodTotal)}
                   </p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
+                  <Landmark className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                    Cobrado ventas (hoy)
+                  </p>
+                  <p className="text-lg font-bold text-primary sm:text-2xl">
+                    {formatQ(recaudadoVentasHoy)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground sm:text-xs">Efectivo y tarjeta</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="col-span-2 shadow-sm sm:col-span-1 lg:col-span-1">
+              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30 sm:h-12 sm:w-12">
+                  <Coins className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xs text-muted-foreground sm:text-sm">Abonos (hoy)</p>
+                  <p className="text-lg font-bold text-emerald-600 sm:text-2xl">
+                    {formatQ(abonosRecibidosHoy)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground sm:text-xs">Pagos a cuenta</p>
                 </div>
               </CardContent>
             </Card>
@@ -673,10 +663,10 @@ export function Ventas() {
                 type="button"
                 variant="outline"
                 className="h-11 w-full gap-2"
-                onClick={() => selectedSale && printSaleReceipt(selectedSale)}
+                onClick={() => selectedSale && downloadSaleReceiptPdf(selectedSale)}
               >
-                <Printer className="h-4 w-4" />
-                Imprimir recibo
+                <FileDown className="h-4 w-4" />
+                Generar PDF recibo
               </Button>
             </div>
           )}

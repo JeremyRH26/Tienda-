@@ -14,10 +14,14 @@ import {
   Pencil,
   Trash2,
   ScrollText,
+  FileDown,
+  MessageCircle,
 } from "lucide-react"
 import { mockCustomers, type ShopCustomer, type PendingCreditLine } from "@/lib/mock-data"
 import { formatQ } from "@/lib/currency"
 import { useBusiness } from "@/lib/business-context"
+import { downloadCustomerCreditPdf } from "@/lib/pdf-reports"
+import { openWhatsAppDebtReminder } from "@/lib/whatsapp"
 import {
   Dialog,
   DialogContent,
@@ -44,7 +48,10 @@ function applyAbonoToCreditLines(
   amount: number
 ): PendingCreditLine[] {
   let remaining = amount
-  const next = lines.map((line) => ({ ...line }))
+  const next = lines.map((line) => ({
+    ...line,
+    items: line.items.map((i) => ({ ...i })),
+  }))
   for (const line of next) {
     if (remaining <= 0) break
     const pay = Math.min(line.saldoPendiente, remaining)
@@ -478,51 +485,142 @@ export function Clientes() {
               </div>
 
               {selectedCustomer.balance > 0 && selectedCustomer.pendingCreditLines.length > 0 && (
-                <div className="space-y-2">
-                  <h3 className="flex items-center gap-2 font-semibold">
-                    <ScrollText className="h-4 w-4 text-muted-foreground" />
-                    Historial de fiados pendientes
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Desglose de ventas registradas al fiado que aún tienen saldo por cobrar.
-                  </p>
-                  <div className="max-h-52 overflow-y-auto rounded-lg border">
-                    <table className="w-full text-xs sm:text-sm">
-                      <thead className="sticky top-0 bg-muted/80 backdrop-blur">
-                        <tr className="border-b text-left">
-                          <th className="p-2 font-medium">Fecha</th>
-                          <th className="p-2 font-medium">Concepto</th>
-                          <th className="p-2 text-right font-medium">Original</th>
-                          <th className="p-2 text-right font-medium">Pendiente</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedCustomer.pendingCreditLines.map((line) => (
-                          <tr key={line.id} className="border-b last:border-0">
-                            <td className="p-2 text-muted-foreground">{line.fecha}</td>
-                            <td className="p-2">{line.descripcion}</td>
-                            <td className="p-2 text-right tabular-nums">
-                              {formatQ(line.totalOriginal)}
-                            </td>
-                            <td className="p-2 text-right font-medium tabular-nums text-destructive">
-                              {formatQ(line.saldoPendiente)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="flex items-center gap-2 font-semibold">
+                        <ScrollText className="h-4 w-4 text-muted-foreground" />
+                        Historial de fiados pendientes
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Cada venta al fiado con el detalle de productos (cantidad, precio y subtotal).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 gap-2"
+                      onClick={() =>
+                        downloadCustomerCreditPdf(
+                          selectedCustomer.name,
+                          selectedCustomer.balance,
+                          selectedCustomer.pendingCreditLines
+                        )
+                      }
+                    >
+                      <FileDown className="h-4 w-4" />
+                      Generar PDF
+                    </Button>
+                  </div>
+                  <div className="max-h-[min(24rem,55vh)] space-y-4 overflow-y-auto pr-1">
+                    {selectedCustomer.pendingCreditLines.map((line) => (
+                      <div
+                        key={line.id}
+                        className="overflow-hidden rounded-lg border bg-card text-xs sm:text-sm"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-2 border-b bg-muted/50 px-3 py-2">
+                          <div>
+                            <p className="font-medium text-foreground">{line.descripcion}</p>
+                            <p className="text-muted-foreground">{line.fecha}</p>
+                          </div>
+                          <div className="text-right text-xs sm:text-sm">
+                            <p className="text-muted-foreground">
+                              Original{" "}
+                              <span className="font-medium tabular-nums text-foreground">
+                                {formatQ(line.totalOriginal)}
+                              </span>
+                            </p>
+                            <p className="text-destructive">
+                              Pendiente{" "}
+                              <span className="font-semibold tabular-nums">
+                                {formatQ(line.saldoPendiente)}
+                              </span>
+                            </p>
+                          </div>
+                        </div>
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b text-left text-muted-foreground">
+                              <th className="px-3 py-2 font-medium">Producto</th>
+                              <th className="px-3 py-2 text-right font-medium">Cant.</th>
+                              <th className="px-3 py-2 text-right font-medium">P. unit.</th>
+                              <th className="px-3 py-2 text-right font-medium">Subtotal</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {line.items.map((item, idx) => (
+                              <tr key={`${line.id}-${idx}`} className="border-b border-border/50 last:border-0">
+                                <td className="px-3 py-2">{item.name}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">{item.quantity}</td>
+                                <td className="px-3 py-2 text-right tabular-nums">
+                                  {formatQ(item.price)}
+                                </td>
+                                <td className="px-3 py-2 text-right font-medium tabular-nums">
+                                  {formatQ(item.quantity * item.price)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
+              {selectedCustomer.balance > 0 && selectedCustomer.pendingCreditLines.length === 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed p-3">
+                  <p className="text-sm text-muted-foreground">
+                    Hay saldo pendiente sin detalle de ventas. Puede generar un PDF con el resumen.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() =>
+                      downloadCustomerCreditPdf(
+                        selectedCustomer.name,
+                        selectedCustomer.balance,
+                        []
+                      )
+                    }
+                  >
+                    <FileDown className="h-4 w-4" />
+                    Generar PDF
+                  </Button>
+                </div>
+              )}
+
               {selectedCustomer.balance > 0 && (
-                <Button
-                  className="h-12 w-full gap-2"
-                  onClick={() => setShowPayment(true)}
-                >
-                  <IconoQuetzal className="text-sm text-primary-foreground" />
-                  Registrar abono
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 flex-1 gap-2 border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                    onClick={() => {
+                      const ok = openWhatsAppDebtReminder(
+                        selectedCustomer.phone,
+                        selectedCustomer.name,
+                        formatQ(selectedCustomer.balance),
+                        "GestiónPro"
+                      )
+                      if (!ok) {
+                        window.alert(
+                          "No se pudo abrir WhatsApp: verifique que el teléfono tenga al menos 7 dígitos o incluya el código 502."
+                        )
+                      }
+                    }}
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    Enviar recordatorio (WhatsApp)
+                  </Button>
+                  <Button className="h-12 flex-1 gap-2" onClick={() => setShowPayment(true)}>
+                    <IconoQuetzal className="text-sm text-primary-foreground" />
+                    Registrar abono
+                  </Button>
+                </div>
               )}
             </div>
           )}
