@@ -502,7 +502,7 @@ export function Clientes() {
                       size="sm"
                       className="shrink-0 gap-2"
                       onClick={() =>
-                        downloadCustomerCreditPdf(
+                        void downloadCustomerCreditPdf(
                           selectedCustomer.name,
                           selectedCustomer.balance,
                           selectedCustomer.pendingCreditLines
@@ -580,7 +580,7 @@ export function Clientes() {
                     size="sm"
                     className="gap-2"
                     onClick={() =>
-                      downloadCustomerCreditPdf(
+                      void downloadCustomerCreditPdf(
                         selectedCustomer.name,
                         selectedCustomer.balance,
                         []

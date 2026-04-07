@@ -450,7 +450,7 @@ export function Ventas() {
                 className="gap-2"
                 onClick={() => {
                   const list = filterSalesByPeriod(salesHistory, salesPrintPeriod, now)
-                  downloadSalesListPdf(list, salesPrintPeriod, now)
+                  void downloadSalesListPdf(list, salesPrintPeriod, now)
                 }}
               >
                 <FileDown className="h-4 w-4" />
@@ -663,7 +663,7 @@ export function Ventas() {
                 type="button"
                 variant="outline"
                 className="h-11 w-full gap-2"
-                onClick={() => selectedSale && downloadSaleReceiptPdf(selectedSale)}
+                onClick={() => selectedSale && void downloadSaleReceiptPdf(selectedSale)}
               >
                 <FileDown className="h-4 w-4" />
                 Generar PDF recibo

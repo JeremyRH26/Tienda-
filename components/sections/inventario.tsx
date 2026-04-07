@@ -197,7 +197,7 @@ export function Inventario() {
             type="button"
             variant="outline"
             className="h-11 gap-2 sm:h-12 sm:px-6"
-            onClick={() => downloadInventoryPdf(products)}
+            onClick={() => void downloadInventoryPdf(products)}
           >
             <FileDown className="h-4 w-4" />
             <span className="hidden sm:inline">Generar PDF inventario</span>

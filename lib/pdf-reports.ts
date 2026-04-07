@@ -1,5 +1,3 @@
-import { jsPDF } from "jspdf"
-import autoTable from "jspdf-autotable"
 import { formatQ } from "@/lib/currency"
 import type { PendingCreditLine, SaleRecord } from "@/lib/mock-data"
 import { salesPeriodLabel, type SalesPrintPeriod } from "@/lib/sales-period"
@@ -21,10 +19,21 @@ type ProductRow = {
   supplier: string
 }
 
-export function downloadInventoryPdf(
+/** Carga perezosa: bundle ES (navegador) para no arrastrar jspdf.node + fflate Worker en Turbopack/SSR. */
+async function loadPdfLibs() {
+  const [jspdfMod, autoTableMod] = await Promise.all([
+    import("jspdf/dist/jspdf.es.min.js"),
+    import("jspdf-autotable"),
+  ])
+  const jsPDF = jspdfMod.jsPDF
+  return { jsPDF, autoTable: autoTableMod.default }
+}
+
+export async function downloadInventoryPdf(
   products: ProductRow[],
   generatedAt: Date = new Date()
 ) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
   doc.setFontSize(16)
   doc.text("Inventario — GestiónPro", 14, 16)
@@ -64,7 +73,8 @@ export function downloadInventoryPdf(
   doc.save(`inventario-${generatedAt.toISOString().slice(0, 10)}.pdf`)
 }
 
-export function downloadSaleReceiptPdf(sale: SaleRecord) {
+export async function downloadSaleReceiptPdf(sale: SaleRecord) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
   const when = sale.timestamp.toLocaleString("es-GT")
   doc.setFontSize(16)
@@ -92,7 +102,7 @@ export function downloadSaleReceiptPdf(sale: SaleRecord) {
     margin: { left: 14, right: 14 },
   })
 
-  const finalY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable
+  const finalY = (doc as { lastAutoTable?: { finalY: number } }).lastAutoTable
     ?.finalY
   const y = (finalY ?? 80) + 8
   doc.setFontSize(12)
@@ -104,11 +114,12 @@ export function downloadSaleReceiptPdf(sale: SaleRecord) {
   doc.save(`recibo-venta-${sale.id}.pdf`)
 }
 
-export function downloadSalesListPdf(
+export async function downloadSalesListPdf(
   sales: SaleRecord[],
   period: SalesPrintPeriod,
   ref: Date = new Date()
 ) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
   const label = salesPeriodLabel(period)
   const sorted = sales
@@ -161,12 +172,13 @@ export function downloadSalesListPdf(
   doc.save(`ventas-${label.replace(/\s+/g, "-")}.pdf`)
 }
 
-export function downloadCustomerCreditPdf(
+export async function downloadCustomerCreditPdf(
   customerName: string,
   balance: number,
   lines: PendingCreditLine[],
   generatedAt: Date = new Date()
 ) {
+  const { jsPDF, autoTable } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
   doc.setFontSize(15)
   doc.text("Estado de cuenta — Fiados", 14, 16)
@@ -188,11 +200,7 @@ export function downloadCustomerCreditPdf(
 
   for (const line of lines) {
     doc.setFontSize(10)
-    doc.text(
-      `${line.fecha} — ${line.descripcion}`,
-      14,
-      startY
-    )
+    doc.text(`${line.fecha} — ${line.descripcion}`, 14, startY)
     doc.setFontSize(8)
     doc.setTextColor(120, 120, 120)
     doc.text(
@@ -219,7 +227,7 @@ export function downloadCustomerCreditPdf(
       margin: { left: 14, right: 14 },
     })
 
-    const ext = doc as jsPDF & { lastAutoTable?: { finalY: number } }
+    const ext = doc as { lastAutoTable?: { finalY: number } }
     startY = (ext.lastAutoTable?.finalY ?? startY) + 12
     if (startY > 250) {
       doc.addPage()
