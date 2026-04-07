@@ -15,6 +15,8 @@ export type AbonoEntry = {
   customerId: number
   customerName: string
   amount: number
+  /** Nota opcional; aparece en el historial del día del abono. */
+  note: string
 }
 
 export type ExpenseCategoryId =
@@ -44,6 +46,7 @@ type BusinessContextValue = {
     customerName: string
     amount: number
     timestamp?: Date
+    note?: string
   }) => void
   expenses: ExpenseEntry[]
   registerExpense: (entry: {
@@ -71,6 +74,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       customerName: string
       amount: number
       timestamp?: Date
+      note?: string
     }) => {
       abonoSeq += 1
       const id = `abono-${Date.now()}-${abonoSeq}`
@@ -82,6 +86,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           customerId: entry.customerId,
           customerName: entry.customerName,
           amount: entry.amount,
+          note: (entry.note ?? "").trim(),
         },
       ])
     },

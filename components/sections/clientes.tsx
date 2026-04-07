@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Search,
   Plus,
@@ -85,6 +86,7 @@ export function Clientes() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [showPayment, setShowPayment] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState("")
+  const [paymentNote, setPaymentNote] = useState("")
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
   const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null)
   const [editForm, setEditForm] = useState({ name: "", phone: "", email: "" })
@@ -191,10 +193,12 @@ export function Clientes() {
       customerId: id,
       customerName: selectedCustomer.name,
       amount: applied,
+      note: paymentNote,
     })
 
     setShowPayment(false)
     setPaymentAmount("")
+    setPaymentNote("")
     setSelectedCustomer(null)
   }
 
@@ -632,7 +636,13 @@ export function Clientes() {
       </Dialog>
 
       {/* Payment Dialog */}
-      <Dialog open={showPayment} onOpenChange={setShowPayment}>
+      <Dialog
+        open={showPayment}
+        onOpenChange={(open) => {
+          setShowPayment(open)
+          if (!open) setPaymentNote("")
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Registrar Abono</DialogTitle>
@@ -657,6 +667,16 @@ export function Clientes() {
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   className="h-12 text-lg"
                   placeholder="0.00"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Comentario (opcional)</label>
+                <Textarea
+                  value={paymentNote}
+                  onChange={(e) => setPaymentNote(e.target.value)}
+                  className="min-h-[80px] resize-y"
+                  placeholder="Ej. pago parcial, referencia…"
                 />
               </div>
 

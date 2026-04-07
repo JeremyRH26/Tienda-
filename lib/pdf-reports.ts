@@ -1,5 +1,6 @@
 import { formatQ } from "@/lib/currency"
 import type { PendingCreditLine, SaleRecord } from "@/lib/mock-data"
+import { aggregateProfitForSales, type CatalogProduct } from "@/lib/sale-profit"
 import { salesPeriodLabel, type SalesPrintPeriod } from "@/lib/sales-period"
 
 function paymentLabel(method: string): string {
@@ -41,10 +42,15 @@ export async function downloadInventoryPdf(
   doc.setTextColor(80, 80, 80)
   doc.text(`Generado: ${generatedAt.toLocaleString("es-GT")}`, 14, 22)
   doc.text(`Total de productos: ${products.length}`, 14, 27)
+  const valorTotalInventario = products.reduce(
+    (acc, p) => acc + p.costPrice * p.stock,
+    0
+  )
+  doc.text(`Valor total del inventario: ${formatQ(valorTotalInventario)}`, 14, 32)
   doc.setTextColor(0, 0, 0)
 
   autoTable(doc, {
-    startY: 31,
+    startY: 37,
     head: [
       [
         "Producto",
@@ -117,7 +123,8 @@ export async function downloadSaleReceiptPdf(sale: SaleRecord) {
 export async function downloadSalesListPdf(
   sales: SaleRecord[],
   period: SalesPrintPeriod,
-  ref: Date = new Date()
+  ref: Date = new Date(),
+  catalog: CatalogProduct[]
 ) {
   const { jsPDF, autoTable } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" })
@@ -125,24 +132,26 @@ export async function downloadSalesListPdf(
   const sorted = sales
     .slice()
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-  const sumCobrado = sales
-    .filter((s) => s.paymentMethod === "efectivo" || s.paymentMethod === "tarjeta")
-    .reduce((a, s) => a + s.total, 0)
+  const paidSales = sales.filter(
+    (s) => s.paymentMethod === "efectivo" || s.paymentMethod === "tarjeta"
+  )
+  const sumCobrado = paidSales.reduce((a, s) => a + s.total, 0)
+  const { totalCost, totalMargin } = aggregateProfitForSales(paidSales, catalog)
 
   doc.setFontSize(15)
   doc.text(`Listado de ventas (${label})`, 14, 14)
   doc.setFontSize(9)
   doc.setTextColor(80, 80, 80)
   doc.text(`MiniMer — Referencia: ${ref.toLocaleDateString("es-GT")}`, 14, 20)
-  doc.text(
-    `Registros: ${sales.length}  |  Total cobrado: ${formatQ(sumCobrado)}`,
-    14,
-    25
-  )
+  doc.text(`Registros: ${sales.length}`, 14, 25)
+  doc.text(`Costo total: ${formatQ(totalCost)}`, 14, 30)
+  doc.text(`Ganancia total: ${formatQ(totalMargin)}`, 14, 35)
+  doc.setFontSize(11)
   doc.setTextColor(0, 0, 0)
+  doc.text(`Total cobrado: ${formatQ(sumCobrado)}`, 14, 42)
 
   autoTable(doc, {
-    startY: 29,
+    startY: 48,
     head: [["ID", "Fecha", "Cliente", "Pago", "Detalle", "Total"]],
     body:
       sorted.length > 0

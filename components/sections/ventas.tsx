@@ -26,7 +26,7 @@ import {
 } from "lucide-react"
 import { mockProducts, mockCustomers, mockSalesHistoryExtended, type SaleRecord } from "@/lib/mock-data"
 import { formatQ, isSameCalendarDay } from "@/lib/currency"
-import { useBusiness } from "@/lib/business-context"
+import { useBusiness, type AbonoEntry } from "@/lib/business-context"
 import {
   filterSalesByPeriod,
   formatSalesHistoryPeriodCaption,
@@ -82,6 +82,10 @@ function isPaidSale(s: SaleRecord): boolean {
   return s.paymentMethod === "efectivo" || s.paymentMethod === "tarjeta"
 }
 
+type HistoryRow =
+  | { kind: "sale"; sale: SaleRecord }
+  | { kind: "abono"; abono: AbonoEntry }
+
 export function Ventas() {
   const { abonos } = useBusiness()
   const [searchTerm, setSearchTerm] = useState("")
@@ -100,6 +104,8 @@ export function Ventas() {
   const [showBalanceOpen, setShowBalanceOpen] = useState(false)
   const [selectedSale, setSelectedSale] = useState<SaleRecord | null>(null)
   const [showSaleDetail, setShowSaleDetail] = useState(false)
+  const [selectedAbono, setSelectedAbono] = useState<AbonoEntry | null>(null)
+  const [showAbonoDetail, setShowAbonoDetail] = useState(false)
   const [saleToDelete, setSaleToDelete] = useState<SaleRecord | null>(null)
   const [editingSale, setEditingSale] = useState<SaleRecord | null>(null)
   const [editSaleCustomer, setEditSaleCustomer] = useState("")
@@ -164,13 +170,35 @@ export function Ventas() {
     [visibleSales]
   )
 
-  const listFilteredSales = useMemo(() => {
+  const visibleAbonos = useMemo(
+    () => filterSalesByPeriod(abonos, historyViewPeriod, historyRefDate),
+    [abonos, historyViewPeriod, historyRefDate]
+  )
+
+  const historyRows = useMemo((): HistoryRow[] => {
+    const rows: HistoryRow[] = [
+      ...visibleSales.map((sale) => ({ kind: "sale" as const, sale })),
+      ...visibleAbonos.map((abono) => ({ kind: "abono" as const, abono })),
+    ]
+    rows.sort((a, b) => {
+      const ta = a.kind === "sale" ? a.sale.timestamp : a.abono.timestamp
+      const tb = b.kind === "sale" ? b.sale.timestamp : b.abono.timestamp
+      return tb.getTime() - ta.getTime()
+    })
+    return rows
+  }, [visibleSales, visibleAbonos])
+
+  const filteredHistoryRows = useMemo(() => {
     const q = historyProductSearch.trim().toLowerCase()
-    if (!q) return visibleSales
-    return visibleSales.filter((s) =>
-      s.items.some((i) => i.name.toLowerCase().includes(q))
-    )
-  }, [visibleSales, historyProductSearch])
+    if (!q) return historyRows
+    return historyRows.filter((row) => {
+      if (row.kind === "sale") {
+        return row.sale.items.some((i) => i.name.toLowerCase().includes(q))
+      }
+      const note = (row.abono.note ?? "").toLowerCase()
+      return row.abono.customerName.toLowerCase().includes(q) || note.includes(q)
+    })
+  }, [historyRows, historyProductSearch])
 
   const periodRevenueTotal = useMemo(
     () => visibleSalesPaid.reduce((acc, sale) => acc + sale.total, 0),
@@ -530,7 +558,8 @@ export function Ventas() {
                     void downloadSalesListPdf(
                       visibleSales,
                       historyViewPeriod,
-                      historyRefDate
+                      historyRefDate,
+                      mockProducts
                     )
                   }}
                 >
@@ -626,7 +655,7 @@ export function Ventas() {
                 <Input
                   value={historyProductSearch}
                   onChange={(e) => setHistoryProductSearch(e.target.value)}
-                  placeholder="Buscar por producto en el periodo…"
+                  placeholder="Producto, cliente o comentario de abono…"
                   className="h-10 pl-9"
                   aria-label="Buscar producto en historial"
                 />
@@ -634,85 +663,142 @@ export function Ventas() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y">
-                {visibleSales.length === 0 ? (
+                {visibleSales.length === 0 && visibleAbonos.length === 0 ? (
                   <p className="p-6 text-center text-sm text-muted-foreground">
-                    No hay ventas en el periodo seleccionado.
+                    No hay movimientos en el periodo seleccionado.
                   </p>
-                ) : listFilteredSales.length === 0 ? (
+                ) : filteredHistoryRows.length === 0 ? (
                   <p className="p-6 text-center text-sm text-muted-foreground">
-                    Ninguna venta del periodo incluye ese producto.
+                    Ningún resultado coincide con tu búsqueda.
                   </p>
                 ) : (
-                  listFilteredSales.map((sale) => (
-                    <div
-                      key={sale.id}
-                      className="flex cursor-pointer items-center gap-3 p-4 transition-colors hover:bg-muted/50 sm:gap-4"
-                      onClick={() => {
-                        setSelectedSale(sale)
-                        setShowSaleDetail(true)
-                      }}
-                    >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 sm:h-12 sm:w-12">
-                        <Receipt className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-medium sm:text-base">{sale.customer}</p>
-                          {getPaymentBadge(sale.paymentMethod)}
-                        </div>
-                        <p className="text-xs text-muted-foreground sm:text-sm">
-                          {sale.items.length} producto{sale.items.length > 1 ? "s" : ""} ·{" "}
-                          {formatDateTime(sale.timestamp)}
-                        </p>
-                      </div>
-                      <p className="shrink-0 text-base font-bold text-primary sm:text-lg">
-                        {formatQ(sale.total)}
-                      </p>
+                  filteredHistoryRows.map((row) =>
+                    row.kind === "sale" ? (
                       <div
-                        className="flex shrink-0 items-center gap-1"
-                        onClick={(e) => e.stopPropagation()}
+                        key={`sale-${row.sale.id}`}
+                        className="flex cursor-pointer items-center gap-3 p-4 transition-colors hover:bg-muted/50 sm:gap-4"
+                        onClick={() => {
+                          setSelectedSale(row.sale)
+                          setShowSaleDetail(true)
+                        }}
                       >
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground"
-                          aria-label="Ver detalle"
-                          onClick={() => {
-                            setSelectedSale(sale)
-                            setShowSaleDetail(true)
-                          }}
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 sm:h-12 sm:w-12">
+                          <Receipt className="h-4 w-4 text-primary sm:h-5 sm:w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-medium sm:text-base">
+                              {row.sale.customer}
+                            </p>
+                            {getPaymentBadge(row.sale.paymentMethod)}
+                          </div>
+                          <p className="text-xs text-muted-foreground sm:text-sm">
+                            {row.sale.items.length} producto{row.sale.items.length > 1 ? "s" : ""} ·{" "}
+                            {formatDateTime(row.sale.timestamp)}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-base font-bold text-primary sm:text-lg">
+                          {formatQ(row.sale.total)}
+                        </p>
+                        <div
+                          className="flex shrink-0 items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground"
-                          aria-label="Editar venta"
-                          onClick={() => {
-                            setEditingSale(sale)
-                            setEditSaleCustomer(sale.customer)
-                            setEditSalePayment(sale.paymentMethod)
-                            setEditSaleItems(sale.items.map((i) => ({ ...i })))
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          aria-label="Eliminar venta"
-                          onClick={() => setSaleToDelete(sale)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            aria-label="Ver detalle"
+                            onClick={() => {
+                              setSelectedSale(row.sale)
+                              setShowSaleDetail(true)
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            aria-label="Editar venta"
+                            onClick={() => {
+                              setEditingSale(row.sale)
+                              setEditSaleCustomer(row.sale.customer)
+                              setEditSalePayment(row.sale.paymentMethod)
+                              setEditSaleItems(row.sale.items.map((i) => ({ ...i })))
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            aria-label="Eliminar venta"
+                            onClick={() => setSaleToDelete(row.sale)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ) : (
+                      <div
+                        key={`abono-${row.abono.id}`}
+                        className="flex cursor-pointer items-center gap-3 p-4 transition-colors hover:bg-muted/50 sm:gap-4"
+                        onClick={() => {
+                          setSelectedAbono(row.abono)
+                          setShowAbonoDetail(true)
+                        }}
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30 sm:h-12 sm:w-12">
+                          <Coins className="h-4 w-4 text-emerald-600 sm:h-5 sm:w-5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-medium sm:text-base">
+                              {row.abono.customerName}
+                            </p>
+                            <Badge
+                              variant="outline"
+                              className="border-emerald-600 text-emerald-700 dark:text-emerald-400"
+                            >
+                              Abono
+                            </Badge>
+                          </div>
+                          <p className="line-clamp-2 text-xs text-muted-foreground sm:text-sm">
+                            {row.abono.note
+                              ? row.abono.note
+                              : `Abono registrado · ${formatDateTime(row.abono.timestamp)}`}
+                            {row.abono.note ? ` · ${formatDateTime(row.abono.timestamp)}` : ""}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-base font-bold text-emerald-600 sm:text-lg">
+                          {formatQ(row.abono.amount)}
+                        </p>
+                        <div
+                          className="flex shrink-0 items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            aria-label="Ver detalle del abono"
+                            onClick={() => {
+                              setSelectedAbono(row.abono)
+                              setShowAbonoDetail(true)
+                            }}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  )
                 )}
               </div>
             </CardContent>
@@ -801,7 +887,7 @@ export function Ventas() {
                     <div className="flex justify-between gap-2 border-t pt-2">
                       <span className="text-muted-foreground">Ganancia de la venta</span>
                       <span className="font-semibold text-emerald-600 tabular-nums">
-                        {isFiado ? "—" : formatQ(pb.totalMargin)}
+                        {formatQ(pb.totalMargin)}
                       </span>
                     </div>
                   </div>
@@ -825,11 +911,9 @@ export function Ventas() {
                         <p className="text-xs text-muted-foreground">
                           {formatQ(line.price)} × {line.quantity}
                         </p>
-                        {!isFiado && (
-                          <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
-                            {formatQ(line.lineMargin)}
-                          </p>
-                        )}
+                        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                          Ganancia: {formatQ(line.lineMargin)}
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -853,6 +937,55 @@ export function Ventas() {
                 </div>
               )
             })()}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showAbonoDetail}
+        onOpenChange={(open) => {
+          setShowAbonoDetail(open)
+          if (!open) setSelectedAbono(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Abono</DialogTitle>
+            <DialogDescription className="sr-only">Detalle de abono</DialogDescription>
+          </DialogHeader>
+          {selectedAbono && (
+            <div className="space-y-3 py-2">
+              <div className="grid gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Cliente</span>
+                  <span className="text-right font-medium">{selectedAbono.customerName}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">Fecha y hora</span>
+                  <span className="text-right font-medium">
+                    {selectedAbono.timestamp.toLocaleString("es-GT", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2 border-t pt-2">
+                  <span className="text-muted-foreground">Monto</span>
+                  <span className="text-lg font-bold text-emerald-600 tabular-nums">
+                    {formatQ(selectedAbono.amount)}
+                  </span>
+                </div>
+              </div>
+              {selectedAbono.note ? (
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs font-medium text-muted-foreground">Comentario</p>
+                  <p className="mt-1 text-sm whitespace-pre-wrap">{selectedAbono.note}</p>
+                </div>
+              ) : null}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
