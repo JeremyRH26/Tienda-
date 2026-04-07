@@ -607,7 +607,7 @@ export function Clientes() {
                         selectedCustomer.phone,
                         selectedCustomer.name,
                         formatQ(selectedCustomer.balance),
-                        "GestiónPro"
+                        "MiniMer"
                       )
                       if (!ok) {
                         window.alert(

@@ -36,7 +36,7 @@ export async function downloadInventoryPdf(
   const { jsPDF, autoTable } = await loadPdfLibs()
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" })
   doc.setFontSize(16)
-  doc.text("Inventario — GestiónPro", 14, 16)
+  doc.text("Inventario — MiniMer", 14, 16)
   doc.setFontSize(9)
   doc.setTextColor(80, 80, 80)
   doc.text(`Generado: ${generatedAt.toLocaleString("es-GT")}`, 14, 22)
@@ -81,7 +81,7 @@ export async function downloadSaleReceiptPdf(sale: SaleRecord) {
   doc.text("Recibo de venta", 14, 18)
   doc.setFontSize(9)
   doc.setTextColor(90, 90, 90)
-  doc.text("GestiónPro", 14, 24)
+  doc.text("MiniMer", 14, 24)
   doc.setTextColor(0, 0, 0)
   doc.setFontSize(10)
   doc.text(`No. ${sale.id}  ·  Fecha: ${when}`, 14, 32)
@@ -125,15 +125,17 @@ export async function downloadSalesListPdf(
   const sorted = sales
     .slice()
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-  const sum = sales.reduce((a, s) => a + s.total, 0)
+  const sumCobrado = sales
+    .filter((s) => s.paymentMethod === "efectivo" || s.paymentMethod === "tarjeta")
+    .reduce((a, s) => a + s.total, 0)
 
   doc.setFontSize(15)
   doc.text(`Listado de ventas (${label})`, 14, 14)
   doc.setFontSize(9)
   doc.setTextColor(80, 80, 80)
-  doc.text(`GestiónPro — Referencia: ${ref.toLocaleDateString("es-GT")}`, 14, 20)
+  doc.text(`MiniMer — Referencia: ${ref.toLocaleDateString("es-GT")}`, 14, 20)
   doc.text(
-    `Registros: ${sales.length}  |  Total periodo: ${formatQ(sum)}`,
+    `Registros: ${sales.length}  |  Total cobrado: ${formatQ(sumCobrado)}`,
     14,
     25
   )

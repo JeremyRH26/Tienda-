@@ -71,7 +71,7 @@ export function AppSidebar({
           </div>
           {!collapsed && (
             <span className="text-lg font-semibold text-sidebar-foreground">
-              GestiónPro
+              MiniMer
             </span>
           )}
         </div>

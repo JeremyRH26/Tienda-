@@ -1,15 +1,41 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search, Plus, Minus, Trash2, CreditCard, Banknote, User, ShoppingCart, Receipt, Clock, Eye, Pencil, CalendarDays, List, FileDown, Landmark, Coins } from "lucide-react"
+import {
+  Search,
+  Plus,
+  Minus,
+  Trash2,
+  CreditCard,
+  Banknote,
+  User,
+  ShoppingCart,
+  Receipt,
+  Clock,
+  Eye,
+  Pencil,
+  CalendarDays,
+  FileDown,
+  Landmark,
+  Coins,
+  TrendingUp,
+  Scale,
+} from "lucide-react"
 import { mockProducts, mockCustomers, mockSalesHistoryExtended, type SaleRecord } from "@/lib/mock-data"
 import { formatQ, isSameCalendarDay } from "@/lib/currency"
 import { useBusiness } from "@/lib/business-context"
-import { filterSalesByPeriod, type SalesPrintPeriod } from "@/lib/sales-period"
+import {
+  filterSalesByPeriod,
+  formatSalesHistoryPeriodCaption,
+  type SalesPrintPeriod,
+} from "@/lib/sales-period"
+import { aggregateProfitForSales, saleProfitBreakdown } from "@/lib/sale-profit"
 import { downloadSalesListPdf, downloadSaleReceiptPdf } from "@/lib/pdf-reports"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Dialog,
   DialogContent,
@@ -48,6 +74,14 @@ interface CartItem {
   quantity: number
 }
 
+function dateAtNoon(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)
+}
+
+function isPaidSale(s: SaleRecord): boolean {
+  return s.paymentMethod === "efectivo" || s.paymentMethod === "tarjeta"
+}
+
 export function Ventas() {
   const { abonos } = useBusiness()
   const [searchTerm, setSearchTerm] = useState("")
@@ -59,7 +93,11 @@ export function Ventas() {
   const [salesHistory, setSalesHistory] = useState<SaleRecord[]>(() =>
     mockSalesHistoryExtended.map((s) => ({ ...s, timestamp: new Date(s.timestamp) }))
   )
-  const [salesDayFilter, setSalesDayFilter] = useState<"today" | "all">("today")
+  const [historyViewPeriod, setHistoryViewPeriod] =
+    useState<SalesPrintPeriod>("day")
+  const [historyRefDate, setHistoryRefDate] = useState(() => dateAtNoon(new Date()))
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [showBalanceOpen, setShowBalanceOpen] = useState(false)
   const [selectedSale, setSelectedSale] = useState<SaleRecord | null>(null)
   const [showSaleDetail, setShowSaleDetail] = useState(false)
   const [saleToDelete, setSaleToDelete] = useState<SaleRecord | null>(null)
@@ -70,7 +108,7 @@ export function Ventas() {
     { name: string; quantity: number; price: number }[]
   >([])
   const [catalogPickerKey, setCatalogPickerKey] = useState(0)
-  const [salesPrintPeriod, setSalesPrintPeriod] = useState<SalesPrintPeriod>("day")
+  const [historyProductSearch, setHistoryProductSearch] = useState("")
 
   const filteredProducts = mockProducts.filter(
     (product) =>
@@ -116,12 +154,43 @@ export function Ventas() {
   const cartItemCount = cart.reduce((acc, item) => acc + item.quantity, 0)
 
   const now = new Date()
-  const visibleSales =
-    salesDayFilter === "today"
-      ? salesHistory.filter((s) => isSameCalendarDay(s.timestamp, now))
-      : salesHistory
+  const visibleSales = useMemo(
+    () => filterSalesByPeriod(salesHistory, historyViewPeriod, historyRefDate),
+    [salesHistory, historyViewPeriod, historyRefDate]
+  )
 
-  const todayTotal = visibleSales.reduce((acc, sale) => acc + sale.total, 0)
+  const visibleSalesPaid = useMemo(
+    () => visibleSales.filter(isPaidSale),
+    [visibleSales]
+  )
+
+  const listFilteredSales = useMemo(() => {
+    const q = historyProductSearch.trim().toLowerCase()
+    if (!q) return visibleSales
+    return visibleSales.filter((s) =>
+      s.items.some((i) => i.name.toLowerCase().includes(q))
+    )
+  }, [visibleSales, historyProductSearch])
+
+  const periodRevenueTotal = useMemo(
+    () => visibleSalesPaid.reduce((acc, sale) => acc + sale.total, 0),
+    [visibleSalesPaid]
+  )
+
+  const periodProfitTotal = useMemo(
+    () => aggregateProfitForSales(visibleSalesPaid, mockProducts).totalMargin,
+    [visibleSalesPaid]
+  )
+
+  const balanceTotals = useMemo(
+    () => aggregateProfitForSales(visibleSalesPaid, mockProducts),
+    [visibleSalesPaid]
+  )
+
+  const historyPeriodCaption = formatSalesHistoryPeriodCaption(
+    historyViewPeriod,
+    historyRefDate
+  )
 
   const nextSaleId = () =>
     salesHistory.length ? Math.max(...salesHistory.map((s) => s.id)) + 1 : 1
@@ -157,10 +226,6 @@ export function Ventas() {
       minute: "2-digit",
     })
   }
-
-  const fiadosPeriodTotal = visibleSales
-    .filter((s) => s.paymentMethod === "fiado")
-    .reduce((acc, s) => acc + s.total, 0)
 
   const ventasHoy = salesHistory.filter((s) => isSameCalendarDay(s.timestamp, now))
   const recaudadoVentasHoy = ventasHoy
@@ -401,61 +466,78 @@ export function Ventas() {
         </TabsContent>
 
         <TabsContent value="history" className="mt-4 space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-            <p className="text-sm text-muted-foreground">
-              {salesDayFilter === "today"
-                ? "Mostrando solo ventas del día de hoy."
-                : "Mostrando todas las ventas registradas en esta sesión."}
-            </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant={salesDayFilter === "today" ? "default" : "outline"}
-                size="sm"
-                className="gap-2"
-                onClick={() => setSalesDayFilter("today")}
-              >
-                <CalendarDays className="h-4 w-4" />
-                Solo hoy
-              </Button>
-              <Button
-                type="button"
-                variant={salesDayFilter === "all" ? "default" : "outline"}
-                size="sm"
-                className="gap-2"
-                onClick={() => setSalesDayFilter("all")}
-              >
-                <List className="h-4 w-4" />
-                Todas
-              </Button>
-              <div className="hidden h-6 w-px bg-border sm:block" aria-hidden />
-              <Select
-                value={salesPrintPeriod}
-                onValueChange={(v) => setSalesPrintPeriod(v as SalesPrintPeriod)}
-              >
-                <SelectTrigger className="h-9 w-[130px]">
-                  <SelectValue placeholder="Periodo PDF" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">PDF: día</SelectItem>
-                  <SelectItem value="week">PDF: semana</SelectItem>
-                  <SelectItem value="month">PDF: mes</SelectItem>
-                  <SelectItem value="year">PDF: año</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => {
-                  const list = filterSalesByPeriod(salesHistory, salesPrintPeriod, now)
-                  void downloadSalesListPdf(list, salesPrintPeriod, now)
-                }}
-              >
-                <FileDown className="h-4 w-4" />
-                Generar PDF ventas
-              </Button>
+          <div className="flex flex-col gap-3">
+            <p className="text-sm font-medium text-foreground">{historyPeriodCaption}</p>
+            <div className="flex flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between">
+              <div className="flex flex-wrap items-center gap-2">
+                {(
+                  [
+                    { id: "day" as const, label: "Día" },
+                    { id: "week" as const, label: "Semana" },
+                    { id: "month" as const, label: "Mes" },
+                    { id: "year" as const, label: "Año" },
+                  ] as const
+                ).map(({ id, label }) => (
+                  <Button
+                    key={id}
+                    type="button"
+                    size="sm"
+                    variant={historyViewPeriod === id ? "default" : "outline"}
+                    onClick={() => setHistoryViewPeriod(id)}
+                  >
+                    {label}
+                  </Button>
+                ))}
+                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="gap-2">
+                      <CalendarDays className="h-4 w-4" />
+                      Calendario
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={historyRefDate}
+                      onSelect={(d) => {
+                        if (d) {
+                          setHistoryRefDate(dateAtNoon(d))
+                          setCalendarOpen(false)
+                        }
+                      }}
+                      defaultMonth={historyRefDate}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setShowBalanceOpen(true)}
+                >
+                  <Scale className="h-4 w-4" />
+                  Balance
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => {
+                    void downloadSalesListPdf(
+                      visibleSales,
+                      historyViewPeriod,
+                      historyRefDate
+                    )
+                  }}
+                >
+                  <FileDown className="h-4 w-4" />
+                  Generar PDF ventas
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -467,7 +549,7 @@ export function Ventas() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    {salesDayFilter === "today" ? "Ventas hoy" : "Ventas"}
+                    Ventas (periodo)
                   </p>
                   <p className="text-lg font-bold sm:text-2xl">{visibleSales.length}</p>
                 </div>
@@ -480,23 +562,25 @@ export function Ventas() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    {salesDayFilter === "today" ? "Total hoy" : "Total"}
+                    Total cobrado (periodo)
                   </p>
-                  <p className="text-lg font-bold text-primary sm:text-2xl">{formatQ(todayTotal)}</p>
+                  <p className="text-lg font-bold text-primary sm:text-2xl">
+                    {formatQ(periodRevenueTotal)}
+                  </p>
                 </div>
               </CardContent>
             </Card>
             <Card className="shadow-sm">
               <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30 sm:h-12 sm:w-12">
-                  <User className="h-5 w-5 text-amber-600 sm:h-6 sm:w-6" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30 sm:h-12 sm:w-12">
+                  <TrendingUp className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    {salesDayFilter === "today" ? "Fiados hoy" : "Fiados"}
+                    Ganancia (periodo)
                   </p>
-                  <p className="text-lg font-bold text-amber-600 sm:text-2xl">
-                    {formatQ(fiadosPeriodTotal)}
+                  <p className="text-lg font-bold text-emerald-600 sm:text-2xl">
+                    {formatQ(periodProfitTotal)}
                   </p>
                 </div>
               </CardContent>
@@ -513,7 +597,6 @@ export function Ventas() {
                   <p className="text-lg font-bold text-primary sm:text-2xl">
                     {formatQ(recaudadoVentasHoy)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground sm:text-xs">Efectivo y tarjeta</p>
                 </div>
               </CardContent>
             </Card>
@@ -527,18 +610,27 @@ export function Ventas() {
                   <p className="text-lg font-bold text-emerald-600 sm:text-2xl">
                     {formatQ(abonosRecibidosHoy)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground sm:text-xs">Pagos a cuenta</p>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           <Card className="shadow-sm">
-            <CardHeader className="pb-3">
+            <CardHeader className="space-y-3 pb-3">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold sm:text-base">
                 <Clock className="h-4 w-4" />
                 Historial de ventas
               </CardTitle>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={historyProductSearch}
+                  onChange={(e) => setHistoryProductSearch(e.target.value)}
+                  placeholder="Buscar por producto en el periodo…"
+                  className="h-10 pl-9"
+                  aria-label="Buscar producto en historial"
+                />
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y">
@@ -546,8 +638,12 @@ export function Ventas() {
                   <p className="p-6 text-center text-sm text-muted-foreground">
                     No hay ventas en el periodo seleccionado.
                   </p>
+                ) : listFilteredSales.length === 0 ? (
+                  <p className="p-6 text-center text-sm text-muted-foreground">
+                    Ninguna venta del periodo incluye ese producto.
+                  </p>
                 ) : (
-                  visibleSales.map((sale) => (
+                  listFilteredSales.map((sale) => (
                     <div
                       key={sale.id}
                       className="flex cursor-pointer items-center gap-3 p-4 transition-colors hover:bg-muted/50 sm:gap-4"
@@ -624,52 +720,139 @@ export function Ventas() {
         </TabsContent>
       </Tabs>
 
+      <Dialog open={showBalanceOpen} onOpenChange={setShowBalanceOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Balance</DialogTitle>
+            <DialogDescription className="sr-only">
+              Resumen del periodo seleccionado en historial
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm font-medium text-foreground">{historyPeriodCaption}</p>
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Ventas cobradas</span>
+                <span className="font-medium tabular-nums">{visibleSalesPaid.length}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Ingresos</span>
+                <span className="font-medium tabular-nums">
+                  {formatQ(balanceTotals.totalRevenue)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Precio costo total</span>
+                <span className="font-medium tabular-nums">
+                  {formatQ(balanceTotals.totalCost)}
+                </span>
+              </div>
+              <div className="flex justify-between border-t pt-3 text-base font-semibold">
+                <span>Ganancia generada</span>
+                <span className="text-emerald-600 tabular-nums">
+                  {formatQ(balanceTotals.totalMargin)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Sale Detail Dialog */}
       <Dialog open={showSaleDetail} onOpenChange={setShowSaleDetail}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Detalle de Venta</DialogTitle>
-            <DialogDescription>Informacion completa de la transaccion.</DialogDescription>
+            <DialogDescription className="sr-only">Detalle de venta</DialogDescription>
           </DialogHeader>
-          {selectedSale && (
-            <div className="space-y-4 py-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Venta #{selectedSale.id}</span>
-                <span className="text-sm text-muted-foreground">{formatTime(selectedSale.timestamp)}</span>
-              </div>
-              <div className="rounded-lg border p-4">
-                <p className="text-sm font-medium">{selectedSale.customer}</p>
-                <div className="mt-1">{getPaymentBadge(selectedSale.paymentMethod)}</div>
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Productos</p>
-                {selectedSale.items.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
-                    <div>
-                      <p className="text-sm font-medium">{item.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatQ(item.price)} × {item.quantity}
-                      </p>
+          {selectedSale &&
+            (() => {
+              const pb = saleProfitBreakdown(selectedSale, mockProducts)
+              const isFiado = selectedSale.paymentMethod === "fiado"
+              const fechaStr = selectedSale.timestamp.toLocaleDateString("es-GT", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })
+              const horaStr = selectedSale.timestamp.toLocaleTimeString("es-GT", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+              return (
+                <div className="space-y-4 py-4">
+                  <div className="grid gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Venta</span>
+                      <span className="font-medium">#{selectedSale.id}</span>
                     </div>
-                    <p className="font-medium">{formatQ(item.price * item.quantity)}</p>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Fecha</span>
+                      <span className="text-right font-medium">{fechaStr}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Hora</span>
+                      <span className="font-medium">{horaStr}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-muted-foreground">Total productos vendidos</span>
+                      <span className="font-medium tabular-nums">{pb.totalUnits} uds</span>
+                    </div>
+                    <div className="flex justify-between gap-2 border-t pt-2">
+                      <span className="text-muted-foreground">Ganancia de la venta</span>
+                      <span className="font-semibold text-emerald-600 tabular-nums">
+                        {isFiado ? "—" : formatQ(pb.totalMargin)}
+                      </span>
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-primary/10 p-4">
-                <span className="font-medium">Total</span>
-                <span className="text-2xl font-bold text-primary">{formatQ(selectedSale.total)}</span>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 w-full gap-2"
-                onClick={() => selectedSale && void downloadSaleReceiptPdf(selectedSale)}
-              >
-                <FileDown className="h-4 w-4" />
-                Generar PDF recibo
-              </Button>
-            </div>
-          )}
+                  <div className="rounded-lg border p-4">
+                    <p className="text-sm font-medium">{selectedSale.customer}</p>
+                    <div className="mt-1">{getPaymentBadge(selectedSale.paymentMethod)}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Productos</p>
+                    {pb.lines.map((line, index) => (
+                      <div
+                        key={`${line.name}-${index}`}
+                        className="rounded-lg bg-muted/50 p-3 text-sm"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium">{line.name}</p>
+                          <p className="shrink-0 font-medium tabular-nums">
+                            {formatQ(line.lineRevenue)}
+                          </p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {formatQ(line.price)} × {line.quantity}
+                        </p>
+                        {!isFiado && (
+                          <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                            {formatQ(line.lineMargin)}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-primary/10 p-4">
+                    <span className="font-medium">
+                      {isFiado ? "Total fiado" : "Total cobrado"}
+                    </span>
+                    <span className="text-2xl font-bold text-primary">
+                      {formatQ(selectedSale.total)}
+                    </span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 w-full gap-2"
+                    onClick={() => void downloadSaleReceiptPdf(selectedSale)}
+                  >
+                    <FileDown className="h-4 w-4" />
+                    Generar PDF recibo
+                  </Button>
+                </div>
+              )
+            })()}
         </DialogContent>
       </Dialog>
 

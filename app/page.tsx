@@ -115,7 +115,7 @@ function AuthenticatedShell() {
                 <Menu className="h-5 w-5" />
               </Button>
             </SheetTrigger>
-            <span className="text-lg font-semibold">GestiónPro</span>
+            <span className="text-lg font-semibold">MiniMer</span>
           </div>
           <Button
             type="button"

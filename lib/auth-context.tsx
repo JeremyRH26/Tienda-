@@ -11,7 +11,7 @@ import {
 } from "react"
 import { mockEmployees, type Employee } from "@/lib/mock-data"
 
-const STORAGE_KEY = "gestionpro-session-user-id"
+const STORAGE_KEY = "minimer-session-user-id"
 
 type AuthContextValue = {
   user: Employee | null

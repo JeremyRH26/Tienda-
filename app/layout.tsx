@@ -3,7 +3,7 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'GestiónPro - Sistema de Gestión Comercial',
+  title: 'MiniMer - Sistema de Gestión Comercial',
   description: 'Plataforma integral para gestión de comercios: ventas, inventario, clientes y más',
   generator: 'v0.app',
   icons: {

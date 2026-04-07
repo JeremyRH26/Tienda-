@@ -1,9 +1,12 @@
 "use client"
 
+import { useMemo } from "react"
+import { endOfWeek, isWithinInterval, startOfWeek } from "date-fns"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, DollarSign, ShoppingBag, Wallet, AlertCircle } from "lucide-react"
+import { TrendingUp, DollarSign, ShoppingBag, Wallet, AlertCircle } from "lucide-react"
 import { mockSalesData, mockProducts, mockCustomers } from "@/lib/mock-data"
 import { formatQ, formatQChartTick } from "@/lib/currency"
+import { useBusiness } from "@/lib/business-context"
 import {
   Area,
   AreaChart,
@@ -14,9 +17,22 @@ import {
 } from "recharts"
 
 export function Dashboard() {
+  const { expenses } = useBusiness()
   const totalSales = mockSalesData.reduce((acc, day) => acc + day.sales, 0)
-  const totalExpenses = mockSalesData.reduce((acc, day) => acc + day.expenses, 0)
-  const balance = totalSales - totalExpenses
+
+  const { totalExpensesWeek, expensesWeekCount } = useMemo(() => {
+    const ref = new Date()
+    const weekStartsOn = 1 as const
+    const start = startOfWeek(ref, { weekStartsOn })
+    const end = endOfWeek(ref, { weekStartsOn })
+    const inWeek = expenses.filter((e) =>
+      isWithinInterval(e.date, { start, end })
+    )
+    const total = inWeek.reduce((acc, e) => acc + e.amount, 0)
+    return { totalExpensesWeek: total, expensesWeekCount: inWeek.length }
+  }, [expenses])
+
+  const balance = totalSales - totalExpensesWeek
   const totalDebt = mockCustomers.reduce((acc, c) => acc + c.balance, 0)
   const lowStockProducts = mockProducts.filter(p => p.stock < p.minStock)
 
@@ -55,11 +71,11 @@ export function Dashboard() {
             <Wallet className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="text-lg font-bold sm:text-2xl">{formatQ(totalExpenses)}</div>
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingDown className="h-3 w-3" />
-              <span className="hidden sm:inline">-3.2% vs semana anterior</span>
-              <span className="sm:hidden">-3.2%</span>
+            <div className="text-lg font-bold sm:text-2xl">{formatQ(totalExpensesWeek)}</div>
+            <p className="text-xs text-muted-foreground">
+              {expensesWeekCount === 0
+                ? "Sin registros en Gastos esta semana"
+                : `${expensesWeekCount} registro${expensesWeekCount === 1 ? "" : "s"} · módulo Gastos`}
             </p>
           </CardContent>
         </Card>
@@ -74,8 +90,10 @@ export function Dashboard() {
           <CardContent className="pt-0">
             <div className="text-lg font-bold text-primary sm:text-2xl">{formatQ(balance)}</div>
             <p className="text-xs text-muted-foreground">
-              <span className="hidden sm:inline">Ganancia neta esta semana</span>
-              <span className="sm:hidden">Ganancia neta</span>
+              <span className="hidden sm:inline">
+                Ventas de la semana (resumen) menos gastos registrados en Gastos
+              </span>
+              <span className="sm:hidden">Ganancia neta semanal</span>
             </p>
           </CardContent>
         </Card>

@@ -2,7 +2,7 @@ import { isSameCalendarDay } from "@/lib/currency"
 
 export type SalesPrintPeriod = "day" | "week" | "month" | "year"
 
-function startOfWeekMonday(ref: Date): Date {
+export function startOfWeekMonday(ref: Date): Date {
   const d = new Date(ref)
   const day = d.getDay()
   const diff = day === 0 ? -6 : 1 - day
@@ -11,7 +11,7 @@ function startOfWeekMonday(ref: Date): Date {
   return d
 }
 
-function endOfWeekSunday(ref: Date): Date {
+export function endOfWeekSunday(ref: Date): Date {
   const start = startOfWeekMonday(ref)
   const end = new Date(start)
   end.setDate(end.getDate() + 6)
@@ -56,4 +56,28 @@ export function salesPeriodLabel(period: SalesPrintPeriod): string {
     default:
       return period
   }
+}
+
+/** Texto descriptivo del rango visible (para historial / balance). */
+export function formatSalesHistoryPeriodCaption(
+  period: SalesPrintPeriod,
+  ref: Date
+): string {
+  if (period === "day") {
+    return ref.toLocaleDateString("es-GT", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })
+  }
+  if (period === "week") {
+    const a = startOfWeekMonday(ref)
+    const b = endOfWeekSunday(ref)
+    return `${a.toLocaleDateString("es-GT", { day: "numeric", month: "short" })} – ${b.toLocaleDateString("es-GT", { day: "numeric", month: "short", year: "numeric" })}`
+  }
+  if (period === "month") {
+    return ref.toLocaleDateString("es-GT", { month: "long", year: "numeric" })
+  }
+  return String(ref.getFullYear())
 }
