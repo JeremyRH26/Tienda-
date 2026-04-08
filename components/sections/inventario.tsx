@@ -53,6 +53,9 @@ export function Inventario() {
   const [products, setProducts] = useState<ProductRow[]>(() =>
     mockProducts.map((p) => ({ ...p }))
   )
+  const [productCategories, setProductCategories] = useState<string[]>(() => [...categories])
+  const [categoryDialogFor, setCategoryDialogFor] = useState<"add" | "edit" | null>(null)
+  const [newCategoryName, setNewCategoryName] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [showAddProduct, setShowAddProduct] = useState(false)
@@ -184,6 +187,23 @@ export function Inventario() {
     return ((saleNum - costNum) / saleNum * 100).toFixed(1)
   }
 
+  const saveNewProductCategory = () => {
+    const name = newCategoryName.trim()
+    if (!name) return
+    const existing = productCategories.find((c) => c.toLowerCase() === name.toLowerCase())
+    const canonical = existing ?? name
+    if (!existing) {
+      setProductCategories((prev) => [...prev, name])
+    }
+    if (categoryDialogFor === "add") {
+      setNewProduct((p) => ({ ...p, category: canonical }))
+    } else if (categoryDialogFor === "edit") {
+      setEditProductForm((f) => ({ ...f, category: canonical }))
+    }
+    setCategoryDialogFor(null)
+    setNewCategoryName("")
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
@@ -272,23 +292,38 @@ export function Inventario() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Categoría</label>
-                  <Select
-                    value={newProduct.category}
-                    onValueChange={(value) =>
-                      setNewProduct({ ...newProduct, category: value })
-                    }
-                  >
-                    <SelectTrigger className="h-11 sm:h-12">
-                      <SelectValue placeholder="Seleccionar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select
+                      value={newProduct.category}
+                      onValueChange={(value) =>
+                        setNewProduct({ ...newProduct, category: value })
+                      }
+                    >
+                      <SelectTrigger className="h-11 flex-1 sm:h-12">
+                        <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {productCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {cat}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-11 w-11 shrink-0 sm:h-12 sm:w-12"
+                      aria-label="Nueva categoría"
+                      onClick={() => {
+                        setCategoryDialogFor("add")
+                        setNewCategoryName("")
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Proveedor</label>
@@ -452,7 +487,7 @@ export function Inventario() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las categorías</SelectItem>
-              {categories.map((cat) => (
+              {productCategories.map((cat) => (
                 <SelectItem key={cat} value={cat}>
                   {cat}
                 </SelectItem>
@@ -586,21 +621,36 @@ export function Inventario() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Categoría</label>
-              <Select
-                value={editProductForm.category}
-                onValueChange={(v) => setEditProductForm({ ...editProductForm, category: v })}
-              >
-                <SelectTrigger className="h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select
+                  value={editProductForm.category}
+                  onValueChange={(v) => setEditProductForm({ ...editProductForm, category: v })}
+                >
+                  <SelectTrigger className="h-11 flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {productCategories.map((cat) => (
+                      <SelectItem key={cat} value={cat}>
+                        {cat}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0"
+                  aria-label="Nueva categoría"
+                  onClick={() => {
+                    setCategoryDialogFor("edit")
+                    setNewCategoryName("")
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Proveedor</label>
@@ -662,6 +712,43 @@ export function Inventario() {
             </div>
             <Button className="h-11 w-full" onClick={saveProductEdit}>
               Guardar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={categoryDialogFor !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCategoryDialogFor(null)
+            setNewCategoryName("")
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva categoría</DialogTitle>
+            <DialogDescription>Solo se guarda el nombre; quedará disponible en el listado.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nombre</label>
+              <Input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                className="h-11"
+                placeholder="Ej. Bebidas"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    saveNewProductCategory()
+                  }
+                }}
+              />
+            </div>
+            <Button type="button" className="h-11 w-full" onClick={saveNewProductCategory}>
+              Agregar categoría
             </Button>
           </div>
         </DialogContent>

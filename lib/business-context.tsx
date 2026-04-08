@@ -19,15 +19,8 @@ export type AbonoEntry = {
   note: string
 }
 
-export type ExpenseCategoryId =
-  | "servicios_publicos"
-  | "compra_insumos"
-  | "arriendo"
-  | "nomina"
-  | "administrativos"
-  | "transporte_logistica"
-  | "muebles_equipo"
-  | "otros"
+/** Id de categoría de gasto (predefinidas o creadas por el usuario). */
+export type ExpenseCategoryId = string
 
 export type ExpenseEntry = {
   id: string

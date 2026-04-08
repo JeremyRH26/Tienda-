@@ -91,7 +91,7 @@ export function Dashboard() {
             <div className="text-lg font-bold text-primary sm:text-2xl">{formatQ(balance)}</div>
             <p className="text-xs text-muted-foreground">
               <span className="hidden sm:inline">
-                Ventas de la semana (resumen) menos gastos registrados en Gastos
+                Ventas de la semana
               </span>
               <span className="sm:hidden">Ganancia neta semanal</span>
             </p>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -10,14 +10,10 @@ import {
   Truck,
   Phone,
   Mail,
-  Calendar,
-  Package,
-  DollarSign,
   Pencil,
   Trash2,
 } from "lucide-react"
-import { mockSuppliers } from "@/lib/mock-data"
-import { formatQ } from "@/lib/currency"
+import { mockSuppliers, type SupplierContact } from "@/lib/mock-data"
 import {
   Dialog,
   DialogContent,
@@ -26,7 +22,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,11 +33,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-type Supplier = typeof mockSuppliers[0]
+type Supplier = SupplierContact
 
 export function Proveedores() {
   const [suppliers, setSuppliers] = useState<Supplier[]>(() =>
-    mockSuppliers.map((s) => ({ ...s, products: [...s.products] }))
+    mockSuppliers.map((s) => ({ ...s }))
   )
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddSupplier, setShowAddSupplier] = useState(false)
@@ -66,13 +61,9 @@ export function Proveedores() {
     (supplier) =>
       supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       supplier.contact.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.products.some((p) =>
-        p.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+      supplier.phone.includes(searchTerm) ||
+      supplier.email.toLowerCase().includes(searchTerm.toLowerCase())
   )
-
-  const totalPending = suppliers.reduce((acc, s) => acc + s.pendingPayment, 0)
-  const suppliersWithPending = suppliers.filter((s) => s.pendingPayment > 0).length
 
   const handleAddSupplier = () => {
     if (!newSupplier.name.trim()) return
@@ -85,9 +76,6 @@ export function Proveedores() {
         contact: newSupplier.contact.trim() || "-",
         phone: newSupplier.phone.trim() || "-",
         email: newSupplier.email.trim() || "-",
-        products: [],
-        pendingPayment: 0,
-        nextPayment: null,
       },
     ])
     setShowAddSupplier(false)
@@ -136,12 +124,11 @@ export function Proveedores() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Proveedores</h1>
           <p className="text-sm text-muted-foreground sm:text-base">
-            Gestiona tus proveedores y pagos pendientes
+            Contactos de tus proveedores
           </p>
         </div>
         <Dialog open={showAddSupplier} onOpenChange={setShowAddSupplier}>
@@ -153,12 +140,12 @@ export function Proveedores() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Agregar Nuevo Proveedor</DialogTitle>
-              <DialogDescription>Ingresa los datos de contacto del nuevo proveedor.</DialogDescription>
+              <DialogTitle>Agregar contacto</DialogTitle>
+              <DialogDescription>Datos del proveedor para consulta y comunicación.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Nombre de Empresa</label>
+                <label className="text-sm font-medium">Nombre o empresa</label>
                 <Input
                   value={newSupplier.name}
                   onChange={(e) =>
@@ -176,7 +163,7 @@ export function Proveedores() {
                     setNewSupplier({ ...newSupplier, contact: e.target.value })
                   }
                   className="h-12"
-                  placeholder="Nombre del contacto"
+                  placeholder="Persona de contacto"
                 />
               </div>
               <div className="space-y-2">
@@ -191,7 +178,7 @@ export function Proveedores() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email</label>
+                <label className="text-sm font-medium">Correo</label>
                 <Input
                   type="email"
                   value={newSupplier.email}
@@ -203,64 +190,35 @@ export function Proveedores() {
                 />
               </div>
               <Button className="mt-2 h-12 w-full" onClick={handleAddSupplier}>
-                Agregar Proveedor
+                Guardar
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
-        <Card className="shadow-sm">
-          <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
-              <Truck className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Total Proveedores</p>
-              <p className="text-lg font-bold sm:text-2xl">{suppliers.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30 sm:h-12 sm:w-12">
-              <DollarSign className="h-5 w-5 text-amber-600 sm:h-6 sm:w-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Por Pagar</p>
-              <p className="text-lg font-bold text-amber-600 sm:text-2xl">
-                {formatQ(totalPending)}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="col-span-2 shadow-sm lg:col-span-1">
-          <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
-              <Calendar className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Pagos Pendientes</p>
-              <p className="text-lg font-bold sm:text-2xl">{suppliersWithPending}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="shadow-sm">
+        <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
+            <Truck className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-xs text-muted-foreground sm:text-sm">Total de proveedores</p>
+            <p className="text-lg font-bold sm:text-2xl">{suppliers.length}</p>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Buscar por nombre, contacto o producto..."
+          placeholder="Buscar por nombre, contacto, teléfono o correo…"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="h-11 pl-10 sm:h-12"
         />
       </div>
 
-      {/* Suppliers List */}
       <div className="space-y-3 sm:space-y-4">
         {filteredSuppliers.map((supplier) => (
           <Card
@@ -306,56 +264,30 @@ export function Proveedores() {
                     </p>
                   </div>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Package className="h-4 w-4" />
-                    <span>{supplier.products.length} productos</span>
+                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 shrink-0" />
+                    <span>{supplier.phone}</span>
                   </div>
-
-                  {supplier.pendingPayment > 0 && (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="border-amber-500 text-amber-600">
-                        Pago: {formatQ(supplier.pendingPayment)}
-                      </Badge>
-                      {supplier.nextPayment && (
-                        <Badge variant="secondary">
-                          <Calendar className="mr-1 h-3 w-3" />
-                          {supplier.nextPayment}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-
-                  {supplier.pendingPayment === 0 && (
-                    <Badge variant="outline" className="border-primary text-primary">
-                      Al corriente
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{supplier.email}</span>
+                  </div>
                 </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {supplier.products.map((product) => (
-                  <Badge key={product} variant="secondary" className="text-xs">
-                    {product}
-                  </Badge>
-                ))}
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Supplier Detail Dialog */}
       <Dialog
         open={selectedSupplier !== null}
         onOpenChange={(open) => !open && setSelectedSupplier(null)}
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Detalle del Proveedor</DialogTitle>
-            <DialogDescription>Información de contacto, productos y estado de pagos del proveedor.</DialogDescription>
+            <DialogTitle>Proveedor</DialogTitle>
+            <DialogDescription className="sr-only">Datos de contacto</DialogDescription>
           </DialogHeader>
           {selectedSupplier && (
             <div className="space-y-6 py-4">
@@ -370,73 +302,16 @@ export function Proveedores() {
                   </p>
                 </div>
               </div>
-
-              <div className="space-y-3">
-                <h3 className="font-semibold">Información de Contacto</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedSupplier.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span>{selectedSupplier.email}</span>
-                  </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>{selectedSupplier.phone}</span>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span>{selectedSupplier.email}</span>
                 </div>
               </div>
-
-              <div className="space-y-3">
-                <h3 className="font-semibold">Productos que Suministra</h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedSupplier.products.map((product) => (
-                    <Badge key={product} variant="secondary">
-                      {product}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              {selectedSupplier.pendingPayment > 0 && (
-                <Card className="bg-amber-50 dark:bg-amber-900/20">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          Pago Pendiente
-                        </p>
-                        <p className="text-2xl font-bold text-amber-600">
-                          {formatQ(selectedSupplier.pendingPayment)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">
-                          Próximo Pago
-                        </p>
-                        <p className="font-semibold">
-                          {selectedSupplier.nextPayment}
-                        </p>
-                      </div>
-                    </div>
-                    <Button className="mt-4 h-12 w-full gap-2">
-                      <DollarSign className="h-4 w-4" />
-                      Registrar Pago
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-
-              {selectedSupplier.pendingPayment === 0 && (
-                <Card className="bg-primary/5">
-                  <CardContent className="flex items-center gap-3 p-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                      <DollarSign className="h-5 w-5 text-primary" />
-                    </div>
-                    <p className="font-medium text-primary">
-                      Al corriente con los pagos
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           )}
         </DialogContent>
@@ -446,11 +321,11 @@ export function Proveedores() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar proveedor</DialogTitle>
-            <DialogDescription>Actualiza los datos del proveedor.</DialogDescription>
+            <DialogDescription>Actualiza los datos de contacto.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Empresa</label>
+              <label className="text-sm font-medium">Nombre o empresa</label>
               <Input
                 value={editSupplierForm.name}
                 onChange={(e) => setEditSupplierForm({ ...editSupplierForm, name: e.target.value })}

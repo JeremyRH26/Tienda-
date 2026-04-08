@@ -12,16 +12,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Wallet, Plus, Trash2, Banknote, Landmark, CalendarDays } from "lucide-react"
 import { formatQ } from "@/lib/currency"
-import {
-  useBusiness,
-  type ExpenseCategoryId,
-  type ExpenseEntry,
-} from "@/lib/business-context"
+import { useBusiness, type ExpenseEntry } from "@/lib/business-context"
 import { Badge } from "@/components/ui/badge"
 
-const EXPENSE_CATEGORIES: { id: ExpenseCategoryId; label: string }[] = [
+const EXPENSE_CATEGORIES: { id: string; label: string }[] = [
   { id: "servicios_publicos", label: "Servicios públicos" },
   { id: "compra_insumos", label: "Compra de productos e insumos" },
   { id: "arriendo", label: "Arriendo" },
@@ -32,8 +35,15 @@ const EXPENSE_CATEGORIES: { id: ExpenseCategoryId; label: string }[] = [
   { id: "otros", label: "Otros" },
 ]
 
-function categoryLabel(id: ExpenseCategoryId): string {
-  return EXPENSE_CATEGORIES.find((c) => c.id === id)?.label ?? id
+function categoryLabel(
+  id: string,
+  custom: { id: string; label: string }[]
+): string {
+  return (
+    EXPENSE_CATEGORIES.find((c) => c.id === id)?.label ??
+    custom.find((c) => c.id === id)?.label ??
+    id
+  )
 }
 
 function sameMonth(a: Date, b: Date): boolean {
@@ -54,12 +64,19 @@ function parseMonthValue(v: string): Date {
 export function Gastos() {
   const { expenses, registerExpense, removeExpense } = useBusiness()
   const [filterMonth, setFilterMonth] = useState(() => monthValue(new Date()))
+  const [customExpenseCategories, setCustomExpenseCategories] = useState<
+    { id: string; label: string }[]
+  >([])
+  const [showExpenseCategoryDialog, setShowExpenseCategoryDialog] = useState(false)
+  const [newExpenseCategoryName, setNewExpenseCategoryName] = useState("")
+
+  const allExpenseCategories = [...EXPENSE_CATEGORIES, ...customExpenseCategories]
 
   const [formDate, setFormDate] = useState(() => {
     const t = new Date()
     return t.toISOString().slice(0, 10)
   })
-  const [formCategory, setFormCategory] = useState<ExpenseCategoryId | "">("")
+  const [formCategory, setFormCategory] = useState<string>("")
   const [formAmount, setFormAmount] = useState("")
   const [formPayment, setFormPayment] = useState<"efectivo" | "transferencia">(
     "efectivo"
@@ -77,6 +94,16 @@ export function Gastos() {
     () => filtered.reduce((a, e) => a + e.amount, 0),
     [filtered]
   )
+
+  const saveNewExpenseCategory = () => {
+    const label = newExpenseCategoryName.trim()
+    if (!label) return
+    const id = `cat_${Date.now()}`
+    setCustomExpenseCategories((prev) => [...prev, { id, label }])
+    setFormCategory(id)
+    setShowExpenseCategoryDialog(false)
+    setNewExpenseCategoryName("")
+  }
 
   const handleAdd = () => {
     if (!formCategory) return
@@ -183,21 +210,33 @@ export function Gastos() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Categoría</label>
-              <Select
-                value={formCategory}
-                onValueChange={(v) => setFormCategory(v as ExpenseCategoryId)}
-              >
-                <SelectTrigger className="h-11">
-                  <SelectValue placeholder="Seleccione categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPENSE_CATEGORIES.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-2">
+                <Select value={formCategory} onValueChange={setFormCategory}>
+                  <SelectTrigger className="h-11 flex-1">
+                    <SelectValue placeholder="Seleccione categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allExpenseCategories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 shrink-0"
+                  aria-label="Nueva categoría de gasto"
+                  onClick={() => {
+                    setNewExpenseCategoryName("")
+                    setShowExpenseCategoryDialog(true)
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -277,7 +316,9 @@ export function Gastos() {
                       <td className="p-3 whitespace-nowrap text-muted-foreground">
                         {row.date.toLocaleDateString("es-GT")}
                       </td>
-                      <td className="max-w-[200px] p-3">{categoryLabel(row.category)}</td>
+                      <td className="max-w-[200px] p-3">
+                        {categoryLabel(row.category, customExpenseCategories)}
+                      </td>
                       <td className="p-3 text-right font-semibold tabular-nums">
                         {formatQ(row.amount)}
                       </td>
@@ -305,6 +346,41 @@ export function Gastos() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={showExpenseCategoryDialog}
+        onOpenChange={(open) => {
+          setShowExpenseCategoryDialog(open)
+          if (!open) setNewExpenseCategoryName("")
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva categoría de gasto</DialogTitle>
+            <DialogDescription>Solo se guarda el nombre para clasificar gastos.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Nombre</label>
+              <Input
+                value={newExpenseCategoryName}
+                onChange={(e) => setNewExpenseCategoryName(e.target.value)}
+                className="h-11"
+                placeholder="Ej. Mantenimiento"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
+                    saveNewExpenseCategory()
+                  }
+                }}
+              />
+            </div>
+            <Button type="button" className="h-11 w-full" onClick={saveNewExpenseCategory}>
+              Agregar categoría
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

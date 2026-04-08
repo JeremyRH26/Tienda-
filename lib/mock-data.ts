@@ -197,12 +197,20 @@ export const mockCustomers: ShopCustomer[] = [
   },
 ]
 
-export const mockSuppliers = [
-  { id: 1, name: "Distribuidora El Sol", contact: "José Mendoza", phone: "555-1111", email: "ventas@elsol.com", products: ["Coca-Cola", "Arroz", "Frijol"], pendingPayment: 15800, nextPayment: "2024-01-25" },
-  { id: 2, name: "Bimbo", contact: "Laura Torres", phone: "555-2222", email: "dist@bimbo.com", products: ["Pan Bimbo", "Marinela", "Barcel"], pendingPayment: 8500, nextPayment: "2024-01-22" },
-  { id: 3, name: "Grupo Lala", contact: "Miguel Ángel", phone: "555-3333", email: "ventas@lala.com", products: ["Leche", "Yogurt", "Queso"], pendingPayment: 0, nextPayment: null },
-  { id: 4, name: "Distribuidora Norte", contact: "Carmen Ruiz", phone: "555-4444", email: "pedidos@norte.com", products: ["Jabón", "Detergente", "Aceite"], pendingPayment: 4200, nextPayment: "2024-01-28" },
-  { id: 5, name: "PepsiCo", contact: "Ricardo Vega", phone: "555-5555", email: "dist@pepsico.com", products: ["Sabritas", "Pepsi", "Gatorade"], pendingPayment: 12300, nextPayment: "2024-01-30" },
+export type SupplierContact = {
+  id: number
+  name: string
+  contact: string
+  phone: string
+  email: string
+}
+
+export const mockSuppliers: SupplierContact[] = [
+  { id: 1, name: "Distribuidora El Sol", contact: "José Mendoza", phone: "555-1111", email: "ventas@elsol.com" },
+  { id: 2, name: "Bimbo", contact: "Laura Torres", phone: "555-2222", email: "dist@bimbo.com" },
+  { id: 3, name: "Grupo Lala", contact: "Miguel Ángel", phone: "555-3333", email: "ventas@lala.com" },
+  { id: 4, name: "Distribuidora Norte", contact: "Carmen Ruiz", phone: "555-4444", email: "pedidos@norte.com" },
+  { id: 5, name: "PepsiCo", contact: "Ricardo Vega", phone: "555-5555", email: "dist@pepsico.com" },
 ]
 
 export type ModulePermission =
