@@ -10,7 +10,6 @@ import {
   type ReactNode,
 } from "react"
 import type { Employee } from "@/lib/mock-data"
-import { getRoleHomePath } from "@/lib/app-routes"
 import { login as loginApi } from "@/lib/services/auth.service"
 
 const STORAGE_KEY = "minimer-session-user"
@@ -22,7 +21,7 @@ const AuthContext = createContext<{
   login: (
     username: string,
     password: string
-  ) => Promise<{ ok: boolean; message?: string; redirectTo?: string }>
+  ) => Promise<{ ok: boolean; message?: string }>
   logout: () => void
 } | null>(null)
 
@@ -65,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return {
         ok: true,
-        redirectTo: getRoleHomePath(next.role),
       }
     } catch (err) {
       return {
