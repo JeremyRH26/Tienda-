@@ -9,13 +9,13 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import type { Employee } from "@/lib/mock-data"
+import type { AuthUser } from "@/lib/mock-data"
 import { login as loginApi } from "@/lib/services/auth.service"
 
 const STORAGE_KEY = "minimer-session-user"
 
 const AuthContext = createContext<{
-  user: Employee | null
+  user: AuthUser | null
   /** `true` tras leer sesión en el cliente (evita flash login al recargar). */
   ready: boolean
   login: (
@@ -25,12 +25,14 @@ const AuthContext = createContext<{
   logout: () => void
 } | null>(null)
 
-function loadStoredUser(): Employee | null {
+function loadStoredUser(): AuthUser | null {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return null
-    const u = JSON.parse(raw) as Employee
-    if (!u?.id || !Array.isArray(u.permissions)) return null
+    const u = JSON.parse(raw) as AuthUser
+    if (!u?.id || !Array.isArray(u.permissions) || typeof u.fullName !== "string") {
+      return null
+    }
     return { ...u, permissions: [...u.permissions] }
   } catch {
     return null
@@ -38,7 +40,7 @@ function loadStoredUser(): Employee | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<Employee | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {

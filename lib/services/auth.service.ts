@@ -1,4 +1,4 @@
-import type { Employee } from "@/lib/mock-data"
+import type { AuthUser, ModulePermission } from "@/lib/mock-data"
 
 const mod: Record<string, string> = {
   "MOD-001": "dashboard",
@@ -11,7 +11,7 @@ const mod: Record<string, string> = {
   "MOD-008": "reportes",
 }
 
-export async function login(username: string, password: string): Promise<Employee> {
+export async function login(username: string, password: string): Promise<AuthUser> {
   const res = await fetch(
     `${(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api")}/auth/login`,
     {
@@ -30,19 +30,21 @@ export async function login(username: string, password: string): Promise<Employe
   const list = (d.permissions ?? []) as string[]
   const permissions = list
     .map((code) => mod[code])
-    .filter((m): m is string => m != null)
+    .filter((m): m is ModulePermission => m != null)
 
   const roleName = String(d.role?.name ?? "")
+  const roleId = Number(d.role?.id)
+  const st = d.employee.status === 1 ? 1 : 0
+
   return {
     id: d.employee.id,
-    name: d.employee.fullName,
-    role: roleName === "Administrador" ? "admin" : "cajero",
-    roleLabel: roleName,
+    roleId: Number.isFinite(roleId) ? roleId : 0,
+    fullName: d.employee.fullName,
     username: d.employee.username,
-    password: "",
-    phone: d.employee.phone ?? "",
-    status: d.employee.status === 1 ? "active" : "inactive",
-    shift: "",
+    phone: d.employee.phone ?? null,
+    status: st,
+    roleLabel: roleName,
     permissions,
-  } as Employee
+    role: roleName === "Administrador" ? "admin" : "cajero",
+  }
 }

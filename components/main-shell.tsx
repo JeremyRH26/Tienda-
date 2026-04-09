@@ -53,7 +53,7 @@ export function MainShell({ children }: { children: ReactNode }) {
     user?.roleLabel ??
     (user?.role === "admin" ? "Administrador" : "Cajero")
   const userInitials = useMemo(
-    () => (user ? initialsFromName(user.name) : ""),
+    () => (user ? initialsFromName(user.fullName) : ""),
     [user]
   )
 
@@ -103,7 +103,7 @@ export function MainShell({ children }: { children: ReactNode }) {
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
           permissions={permissions}
-          userDisplayName={user.name}
+          userDisplayName={user.fullName}
           userRoleLabel={userRoleLabel}
           userInitials={userInitials}
           onLogout={handleLogout}
@@ -142,7 +142,7 @@ export function MainShell({ children }: { children: ReactNode }) {
             collapsed={false}
             onToggleCollapse={() => {}}
             permissions={permissions}
-            userDisplayName={user.name}
+            userDisplayName={user.fullName}
             userRoleLabel={userRoleLabel}
             userInitials={userInitials}
             onLogout={() => {

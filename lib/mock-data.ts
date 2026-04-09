@@ -234,30 +234,67 @@ export const allModules: { id: ModulePermission; label: string }[] = [
   { id: "reportes", label: "Reportes" },
 ]
 
+/**
+ * Fila `employee` según Tienda-/db/schema.sql (propiedades en camelCase).
+ * `permission` / permisos por rol no son columnas de esta tabla.
+ */
 export interface Employee {
   id: number
-  name: string
-  role: "admin" | "cajero"
-  /** Nombre del rol en BD (p. ej. Administrador, Vendedor). Opcional en mocks. */
-  roleLabel?: string
+  roleId: number
+  fullName: string
   username: string
-  password: string
-  phone: string
-  status: "active" | "inactive"
-  shift: string
-  permissions: ModulePermission[]
+  passwordHash: string
+  phone: string | null
+  /** tinyint: 1 activo, 0 inactivo */
+  status: 0 | 1
+  createdAt: string
+  updatedAt: string
 }
 
-export const mockEmployees: Employee[] = [
+/**
+ * Listado o mock: permisos efectivos vienen del rol (`role_permission`); `roleLabel` de `role.name`.
+ */
+export type EmployeeWithPermissions = Employee & {
+  permissions: ModulePermission[]
+  roleLabel?: string
+}
+
+/**
+ * Sesión tras login: datos del empleado + rol + permisos (API); `role` es solo ayuda de UI para rutas.
+ */
+export type AuthUser = {
+  id: number
+  roleId: number
+  fullName: string
+  username: string
+  phone: string | null
+  status: 0 | 1
+  roleLabel: string
+  permissions: ModulePermission[]
+  role: "admin" | "cajero"
+}
+
+const MOCK_EMPLOYEE_TS = "2024-01-01T00:00:00.000Z"
+
+/** Valor ficticio de `password_hash` en mocks (no usar en producción). */
+export const MOCK_PASSWORD_HASH_PLACEHOLDER = "$mock$bcrypt-placeholder"
+
+export function isAdminRoleLabel(roleLabel: string | undefined): boolean {
+  return Boolean(roleLabel && /administr/i.test(roleLabel))
+}
+
+export const mockEmployees: EmployeeWithPermissions[] = [
   {
     id: 1,
-    name: "Juan Díaz",
-    role: "admin",
+    roleId: 1,
+    fullName: "Juan Díaz",
     username: "juan.admin",
-    password: "Admin2024!",
+    passwordHash: MOCK_PASSWORD_HASH_PLACEHOLDER,
     phone: "555-0001",
-    status: "active",
-    shift: "Matutino",
+    status: 1,
+    createdAt: MOCK_EMPLOYEE_TS,
+    updatedAt: MOCK_EMPLOYEE_TS,
+    roleLabel: "Administrador",
     permissions: [
       "dashboard",
       "ventas",
@@ -269,17 +306,43 @@ export const mockEmployees: Employee[] = [
       "reportes",
     ],
   },
-  { id: 2, name: "María Flores", role: "cajero", username: "maria.caja", password: "Caja2024!", phone: "555-0002", status: "active", shift: "Vespertino", permissions: ["dashboard", "ventas", "clientes"] },
-  { id: 3, name: "Pedro Gómez", role: "cajero", username: "pedro.caja", password: "Pedro2024!", phone: "555-0003", status: "inactive", shift: "Nocturno", permissions: ["ventas"] },
+  {
+    id: 2,
+    roleId: 2,
+    fullName: "María Flores",
+    username: "maria.caja",
+    passwordHash: MOCK_PASSWORD_HASH_PLACEHOLDER,
+    phone: "555-0002",
+    status: 1,
+    createdAt: MOCK_EMPLOYEE_TS,
+    updatedAt: MOCK_EMPLOYEE_TS,
+    roleLabel: "Cajero",
+    permissions: ["dashboard", "ventas", "clientes"],
+  },
+  {
+    id: 3,
+    roleId: 2,
+    fullName: "Pedro Gómez",
+    username: "pedro.caja",
+    passwordHash: MOCK_PASSWORD_HASH_PLACEHOLDER,
+    phone: "555-0003",
+    status: 0,
+    createdAt: MOCK_EMPLOYEE_TS,
+    updatedAt: MOCK_EMPLOYEE_TS,
+    roleLabel: "Cajero",
+    permissions: ["ventas"],
+  },
   {
     id: 4,
-    name: "Ana Morales",
-    role: "cajero",
+    roleId: 2,
+    fullName: "Ana Morales",
     username: "ana.caja",
-    password: "Ana2024!",
+    passwordHash: MOCK_PASSWORD_HASH_PLACEHOLDER,
     phone: "555-0004",
-    status: "active",
-    shift: "Matutino",
+    status: 1,
+    createdAt: MOCK_EMPLOYEE_TS,
+    updatedAt: MOCK_EMPLOYEE_TS,
+    roleLabel: "Cajero",
     permissions: ["dashboard", "ventas", "inventario", "clientes", "gastos"],
   },
 ]
