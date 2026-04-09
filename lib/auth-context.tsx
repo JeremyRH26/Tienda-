@@ -10,16 +10,19 @@ import {
   type ReactNode,
 } from "react"
 import type { Employee } from "@/lib/mock-data"
+import { getRoleHomePath } from "@/lib/app-routes"
 import { login as loginApi } from "@/lib/services/auth.service"
 
 const STORAGE_KEY = "minimer-session-user"
 
 const AuthContext = createContext<{
   user: Employee | null
+  /** `true` tras leer sesión en el cliente (evita flash login al recargar). */
+  ready: boolean
   login: (
     username: string,
     password: string
-  ) => Promise<{ ok: boolean; message?: string }>
+  ) => Promise<{ ok: boolean; message?: string; redirectTo?: string }>
   logout: () => void
 } | null>(null)
 
@@ -37,22 +40,33 @@ function loadStoredUser(): Employee | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Employee | null>(null)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const restored = loadStoredUser()
     if (restored) setUser(restored)
+    setReady(true)
   }, [])
 
   const login = useCallback(async (username: string, password: string) => {
     try {
       const next = await loginApi(username, password)
+      if (!next.permissions || next.permissions.length === 0) {
+        return {
+          ok: false,
+          message: "El usuario no tiene permisos asignados.",
+        }
+      }
       setUser(next)
       try {
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next))
       } catch {
         /* ignore */
       }
-      return { ok: true }
+      return {
+        ok: true,
+        redirectTo: getRoleHomePath(next.role),
+      }
     } catch (err) {
       return {
         ok: false,
@@ -71,8 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ user, login, logout }),
-    [user, login, logout]
+    () => ({ user, ready, login, logout }),
+    [user, ready, login, logout]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

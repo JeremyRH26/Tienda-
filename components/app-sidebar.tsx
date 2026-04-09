@@ -13,13 +13,14 @@ import {
   Wallet,
   LogOut,
 } from "lucide-react"
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import type { ModulePermission } from "@/lib/mock-data"
 
 interface AppSidebarProps {
-  activeSection: string
-  onSectionChange: (section: string) => void
+  pathname: string
+  onNavigate: () => void
   collapsed: boolean
   onToggleCollapse: () => void
   permissions: ModulePermission[]
@@ -45,8 +46,8 @@ const navItems: {
 ]
 
 export function AppSidebar({
-  activeSection,
-  onSectionChange,
+  pathname,
+  onNavigate,
   collapsed,
   onToggleCollapse,
   permissions,
@@ -93,12 +94,14 @@ export function AppSidebar({
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">
         {visible.map((item) => {
           const Icon = item.icon
-          const isActive = activeSection === item.id
+          const href = `/${item.id}`
+          const isActive =
+            pathname === href || pathname.startsWith(`${href}/`)
           return (
-            <button
+            <Link
               key={item.id}
-              type="button"
-              onClick={() => onSectionChange(item.id)}
+              href={href}
+              onClick={onNavigate}
               className={cn(
                 "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors",
                 isActive
@@ -109,7 +112,7 @@ export function AppSidebar({
             >
               <Icon className={cn("h-5 w-5 shrink-0", isActive && "text-sidebar-primary")} />
               {!collapsed && <span>{item.label}</span>}
-            </button>
+            </Link>
           )
         })}
       </nav>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/lib/auth-context"
 
 export function LoginScreen() {
+  const router = useRouter()
   const { login } = useAuth()
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -22,6 +24,8 @@ export function LoginScreen() {
       const result = await login(username, password)
       if (!result.ok) {
         setError(result.message ?? "No se pudo iniciar sesión.")
+      } else if (result.redirectTo) {
+        router.push(result.redirectTo)
       }
     } finally {
       setLoading(false)

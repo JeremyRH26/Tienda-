@@ -1,6 +1,7 @@
-import type { Metadata } from 'next'
-import { Analytics } from '@vercel/analytics/next'
-import './globals.css'
+import type { Metadata } from "next"
+import { Analytics } from "@vercel/analytics/next"
+import { Providers } from "./providers"
+import "./globals.css"
 
 export const metadata: Metadata = {
   title: 'MiniMer - Sistema de Gestión Comercial',
@@ -33,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+        <Providers>{children}</Providers>
         <Analytics />
       </body>
     </html>
