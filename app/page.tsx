@@ -81,7 +81,9 @@ function AuthenticatedShell() {
     setMobileOpen(false)
   }
 
-  const userRoleLabel = user?.role === "admin" ? "Administrador" : "Cajero"
+  const userRoleLabel =
+    user?.roleLabel ??
+    (user?.role === "admin" ? "Administrador" : "Cajero")
   const userInitials = useMemo(
     () => (user ? initialsFromName(user.name) : ""),
     [user]

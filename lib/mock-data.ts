@@ -238,6 +238,8 @@ export interface Employee {
   id: number
   name: string
   role: "admin" | "cajero"
+  /** Nombre del rol en BD (p. ej. Administrador, Vendedor). Opcional en mocks. */
+  roleLabel?: string
   username: string
   password: string
   phone: string

@@ -9,62 +9,56 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { mockEmployees, type Employee } from "@/lib/mock-data"
+import type { Employee } from "@/lib/mock-data"
+import { login as loginApi } from "@/lib/services/auth.service"
 
-const STORAGE_KEY = "minimer-session-user-id"
+const STORAGE_KEY = "minimer-session-user"
 
-type AuthContextValue = {
+const AuthContext = createContext<{
   user: Employee | null
-  login: (username: string, password: string) => { ok: boolean; message?: string }
+  login: (
+    username: string,
+    password: string
+  ) => Promise<{ ok: boolean; message?: string }>
   logout: () => void
-}
+} | null>(null)
 
-const AuthContext = createContext<AuthContextValue | null>(null)
-
-function findActiveEmployee(username: string, password: string): Employee | null {
-  const u = username.trim().toLowerCase()
-  return (
-    mockEmployees.find(
-      (e) =>
-        e.status === "active" &&
-        e.username.toLowerCase() === u &&
-        e.password === password
-    ) ?? null
-  )
+function loadStoredUser(): Employee | null {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const u = JSON.parse(raw) as Employee
+    if (!u?.id || !Array.isArray(u.permissions)) return null
+    return { ...u, permissions: [...u.permissions] }
+  } catch {
+    return null
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Employee | null>(null)
 
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY)
-      if (!raw) return
-      const id = parseInt(raw, 10)
-      if (!Number.isFinite(id)) return
-      const e = mockEmployees.find((x) => x.id === id && x.status === "active")
-      if (e) setUser({ ...e, permissions: [...e.permissions] })
-    } catch {
-      /* ignore */
-    }
+    const restored = loadStoredUser()
+    if (restored) setUser(restored)
   }, [])
 
-  const login = useCallback((username: string, password: string) => {
-    const employee = findActiveEmployee(username, password)
-    if (!employee) {
+  const login = useCallback(async (username: string, password: string) => {
+    try {
+      const next = await loginApi(username, password)
+      setUser(next)
+      try {
+        sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+      return { ok: true }
+    } catch (err) {
       return {
         ok: false,
-        message: "Usuario o contraseña incorrectos, o la cuenta está inactiva.",
+        message: err instanceof Error ? err.message : "No se pudo iniciar sesión.",
       }
     }
-    const next = { ...employee, permissions: [...employee.permissions] }
-    setUser(next)
-    try {
-      sessionStorage.setItem(STORAGE_KEY, String(next.id))
-    } catch {
-      /* ignore */
-    }
-    return { ok: true }
   }, [])
 
   const logout = useCallback(() => {

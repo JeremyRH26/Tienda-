@@ -14,14 +14,17 @@ export function LoginScreen() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
     setLoading(true)
-    const result = login(username, password)
-    setLoading(false)
-    if (!result.ok) {
-      setError(result.message ?? "No se pudo iniciar sesión.")
+    try {
+      const result = await login(username, password)
+      if (!result.ok) {
+        setError(result.message ?? "No se pudo iniciar sesión.")
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -77,8 +80,7 @@ export function LoginScreen() {
             </Button>
           </form>
           <p className="mt-4 text-center text-xs text-muted-foreground">
-            Cuenta demo admin: <span className="font-mono">juan.admin</span> /{" "}
-            <span className="font-mono">Admin2024!</span>
+            Use el usuario y contraseña registrados en el sistema.
           </p>
         </CardContent>
       </Card>
