@@ -57,6 +57,16 @@ export async function fetchRolePermissions(
   return json.data ?? []
 }
 
+export async function deleteRole(roleId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/roles/${roleId}`, {
+    method: "DELETE",
+  })
+  const json = (await res.json()) as { message?: string }
+  if (!res.ok) {
+    throw new Error(json.message ?? "No se pudo eliminar el rol.")
+  }
+}
+
 export async function updateRole(roleId: number, name: string): Promise<RoleDto> {
   const res = await fetch(`${API_BASE}/roles/${roleId}`, {
     method: "PUT",
