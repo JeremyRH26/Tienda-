@@ -495,12 +495,16 @@ export function Gastos() {
       </div>
 
       <Card className="shadow-sm">
-        <CardHeader>
+        <CardHeader className="space-y-1">
           <CardTitle className="text-base">Listado del mes</CardTitle>
+          <p className="text-xs text-muted-foreground sm:text-sm">
+            Ver, editar y eliminar: si la tabla es ancha, desplázate horizontalmente; la
+            columna de acciones permanece visible a la derecha.
+          </p>
         </CardHeader>
         <CardContent className="p-0 sm:p-6 sm:pt-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-md border border-border/60">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/50 text-left">
                   <th className="p-3 font-medium">Fecha</th>
@@ -508,7 +512,9 @@ export function Gastos() {
                   <th className="p-3 text-right font-medium">Monto</th>
                   <th className="p-3 font-medium">Pago</th>
                   <th className="p-3 font-medium">Nota</th>
-                  <th className="w-36 p-3 text-right font-medium">Acciones</th>
+                  <th className="sticky right-0 z-20 w-[132px] min-w-[132px] border-l border-border bg-muted/95 p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm sm:text-sm sm:normal-case">
+                    Acciones
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -534,19 +540,18 @@ export function Gastos() {
                       <td className="max-w-xs p-3 text-muted-foreground">
                         <span className="line-clamp-2">{row.note || "—"}</span>
                       </td>
-                      <td className="p-3">
-                        <div className="flex items-center justify-end gap-0.5">
+                      <td className="sticky right-0 z-10 w-[132px] min-w-[132px] border-l border-border bg-card p-2 align-middle shadow-[-6px_0_12px_-6px_rgba(0,0,0,0.12)] dark:shadow-[-6px_0_12px_-6px_rgba(0,0,0,0.4)]">
+                        <div className="flex flex-wrap items-center justify-end gap-1">
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground"
+                            className="h-9 w-9 shrink-0"
                             aria-label="Ver detalle del gasto"
-                            disabled={!isServerExpenseId(row.id)}
                             title={
                               isServerExpenseId(row.id)
-                                ? "Ver detalle"
-                                : "Sin detalle en servidor"
+                                ? "Ver detalle en servidor"
+                                : "Solo en esta sesión (sin detalle en BD)"
                             }
                             onClick={() => void openExpenseDetail(row)}
                           >
@@ -554,15 +559,14 @@ export function Gastos() {
                           </Button>
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground"
+                            className="h-9 w-9 shrink-0"
                             aria-label="Editar gasto"
-                            disabled={!isServerExpenseId(row.id)}
                             title={
                               isServerExpenseId(row.id)
-                                ? "Editar"
-                                : "Sin edición en servidor"
+                                ? "Editar en servidor"
+                                : "Solo en esta sesión (sin editar en BD)"
                             }
                             onClick={() => void openEditExpense(row)}
                           >
@@ -570,10 +574,11 @@ export function Gastos() {
                           </Button>
                           <Button
                             type="button"
-                            variant="ghost"
+                            variant="outline"
                             size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             aria-label="Eliminar gasto"
+                            title="Eliminar"
                             onClick={() => setExpensePendingDelete(row)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -767,13 +772,63 @@ export function Gastos() {
           if (!open && !deletingExpense) setExpensePendingDelete(null)
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar este gasto?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {expensePendingDelete && isServerExpenseId(expensePendingDelete.id)
-                ? "Se borrará el registro en la base de datos. Esta acción no se puede deshacer."
-                : "Se quitará solo del listado de esta sesión."}
+            <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>¿Seguro que deseas eliminar este gasto?</p>
+                {expensePendingDelete ? (
+                  <div className="rounded-lg border border-border bg-muted/40 p-3 text-foreground">
+                    <p className="font-medium text-foreground">
+                      Resumen del gasto
+                    </p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      <li>
+                        <span className="text-muted-foreground">Fecha: </span>
+                        {expensePendingDelete.date.toLocaleDateString("es-GT")}
+                      </li>
+                      <li>
+                        <span className="text-muted-foreground">Categoría: </span>
+                        {categoryNameFromId(
+                          expensePendingDelete.category,
+                          dbCategories,
+                        )}
+                      </li>
+                      <li>
+                        <span className="text-muted-foreground">Monto: </span>
+                        <span className="font-semibold tabular-nums text-primary">
+                          {formatQ(expensePendingDelete.amount)}
+                        </span>
+                      </li>
+                      {expensePendingDelete.note?.trim() ? (
+                        <li className="line-clamp-3">
+                          <span className="text-muted-foreground">Nota: </span>
+                          {expensePendingDelete.note}
+                        </li>
+                      ) : null}
+                      <li>
+                        <span className="text-muted-foreground">Id en app: </span>
+                        <span className="tabular-nums">{expensePendingDelete.id}</span>
+                        {isServerExpenseId(expensePendingDelete.id) ? (
+                          <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
+                            (registrado en servidor)
+                          </span>
+                        ) : (
+                          <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">
+                            (solo sesión actual)
+                          </span>
+                        )}
+                      </li>
+                    </ul>
+                  </div>
+                ) : null}
+                <p className="font-medium text-destructive">
+                  {expensePendingDelete && isServerExpenseId(expensePendingDelete.id)
+                    ? "Se eliminará permanentemente de la base de datos. No se puede deshacer."
+                    : "Se quitará solo de la lista de esta sesión (no hay fila en el servidor)."}
+                </p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -786,7 +841,7 @@ export function Gastos() {
                 void confirmDeleteExpense()
               }}
             >
-              {deletingExpense ? "Eliminando…" : "Eliminar"}
+              {deletingExpense ? "Eliminando…" : "Sí, eliminar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
