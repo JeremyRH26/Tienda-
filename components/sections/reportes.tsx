@@ -222,14 +222,18 @@ export function Reportes() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Gastos (módulo)</p>
+                <p className="text-sm text-muted-foreground">Gastos</p>
                 <p className="text-2xl font-bold">{formatQ(summary.totalGastos)}</p>
               </div>
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
                 <TrendingDown className="h-5 w-5 text-destructive" />
               </div>
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">Mismo periodo y fecha de referencia</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {period === "mensual" || period === "anual"
+                ? "Suma de gastos en el periodo del informe"
+                : "Total del mes de la fecha seleccionada (igual que Dashboard y Gastos)"}
+            </p>
           </CardContent>
         </Card>
 

@@ -60,6 +60,18 @@ export function filterExpensesForReport(
   return expenses.filter((e) => e.date.getFullYear() === ref.getFullYear())
 }
 
+/** Misma regla que «Total del mes» en Gastos y la tarjeta de gastos del Dashboard. */
+export function filterExpensesSameCalendarMonthAsRef(
+  expenses: ExpenseEntry[],
+  ref: Date
+): ExpenseEntry[] {
+  const y = ref.getFullYear()
+  const m = ref.getMonth()
+  return expenses.filter(
+    (e) => e.date.getFullYear() === y && e.date.getMonth() === m
+  )
+}
+
 export function filterAbonosForReport(
   abonos: AbonoEntry[],
   period: ReportPeriodUi,
@@ -230,9 +242,12 @@ export function buildReportSummary(
   const paid = filteredSales.filter(isPaid)
   const fiadoSales = filteredSales.filter((s) => s.paymentMethod === "fiado")
   const agg = aggregateProfitForSales(paid, catalog)
-  const fe = filterExpensesForReport(expenses, period, ref)
   const fa = filterAbonosForReport(abonos, period, ref)
-  const totalGastos = fe.reduce((a, e) => a + e.amount, 0)
+  const feForKpiTotal =
+    period === "mensual" || period === "anual"
+      ? filterExpensesForReport(expenses, period, ref)
+      : filterExpensesSameCalendarMonthAsRef(expenses, ref)
+  const totalGastos = feForKpiTotal.reduce((a, e) => a + e.amount, 0)
   const totalAbonos = fa.reduce((a, x) => a + x.amount, 0)
   const totalFiado = fiadoSales.reduce((a, s) => a + s.total, 0)
 

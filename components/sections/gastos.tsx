@@ -168,7 +168,7 @@ export function Gastos() {
       setFormCategory(String(created.id))
       setShowExpenseCategoryDialog(false)
       setNewExpenseCategoryName("")
-      toast.success("Categoría guardada en la base de datos.")
+      toast.success("Categoría guardada exitosamente.")
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "No se pudo crear la categoría.",
@@ -206,7 +206,7 @@ export function Gastos() {
         paymentMethod: formPayment,
         note: formNote,
       })
-      toast.success("Gasto guardado en la base de datos.")
+      toast.success("Gasto guardado exitosamente.")
       setFormAmount("")
       setFormNote("")
     } catch (e) {
@@ -307,10 +307,8 @@ export function Gastos() {
           paymentMethod: editPayment,
           note: editNote,
         })
-        toast.success("Gasto actualizado en la base de datos.")
-      } else {
-        toast.success("Gasto actualizado en la sesión.")
       }
+      toast.success("Gasto editado exitosamente.")
       updateExpense(editEntryId, patch)
       setEditOpen(false)
       setEditEntryId(null)
@@ -330,10 +328,10 @@ export function Gastos() {
       if (isServerExpenseId(row.id)) {
         await deleteExpense(Number(row.id))
         removeExpense(row.id)
-        toast.success("Gasto eliminado de la base de datos.")
+        toast.success("Gasto eliminado correctamente.")
       } else {
         removeExpense(row.id)
-        toast.success("Eliminado del listado local.")
+        toast.success("Gasto eliminado correctamente.")
       }
       setExpensePendingDelete(null)
     } catch (e) {
@@ -524,7 +522,7 @@ export function Gastos() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-base">Listado del mes</CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            Ver detalle, editar o eliminar. Al eliminar se pedirá confirmación.
+            Listado en tabla; las acciones son solo iconos (ver, editar, eliminar).
           </p>
         </CardHeader>
         <CardContent className="p-0 sm:p-6 sm:pt-0">
@@ -533,76 +531,86 @@ export function Gastos() {
               No hay gastos en este mes.
             </p>
           ) : (
-            <div className="space-y-3 px-4 pb-4 pt-2 sm:px-0">
-              {filtered.map((row) => (
-                <div
-                  key={row.id}
-                  className="rounded-lg border-2 border-border bg-card p-4 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-foreground">
+            <div className="overflow-x-auto rounded-md border border-border/60">
+              <table className="w-full min-w-[640px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-left">
+                    <th className="whitespace-nowrap p-3 font-medium">Fecha</th>
+                    <th className="p-3 font-medium">Categoría</th>
+                    <th className="whitespace-nowrap p-3 text-right font-medium">
+                      Monto
+                    </th>
+                    <th className="p-3 font-medium">Pago</th>
+                    <th className="min-w-[120px] p-3 font-medium">Nota</th>
+                    <th className="w-px whitespace-nowrap p-3 text-center font-medium">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((row) => (
+                    <tr
+                      key={row.id}
+                      className="border-b border-border/60 last:border-0 hover:bg-muted/20"
+                    >
+                      <td className="whitespace-nowrap p-3 text-muted-foreground">
+                        {row.date.toLocaleDateString("es-GT")}
+                      </td>
+                      <td className="max-w-[200px] p-3">
                         {categoryNameFromId(row.category, dbCategories)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {row.date.toLocaleDateString("es-GT", {
-                          weekday: "short",
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                        })}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {paymentBadge(row.paymentMethod)}
-                      </div>
-                      {row.note?.trim() ? (
-                        <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-                          {row.note}
-                        </p>
-                      ) : null}
-                    </div>
-                    <p className="text-xl font-bold text-primary tabular-nums">
-                      {formatQ(row.amount)}
-                    </p>
-                  </div>
-                  <div
-                    role="group"
-                    aria-label="Acciones del gasto"
-                    className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4"
-                  >
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-10 min-h-10 min-w-[6.5rem] flex-1 gap-2 border-2 border-primary bg-background font-semibold text-primary sm:flex-none sm:min-w-[7rem]"
-                      onClick={() => void openExpenseDetail(row)}
-                    >
-                      <Eye className="h-4 w-4 shrink-0" />
-                      Ver
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-10 min-h-10 min-w-[6.5rem] flex-1 gap-2 border-2 border-violet-600 bg-background font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40 sm:flex-none sm:min-w-[7rem]"
-                      onClick={() => void openEditExpense(row)}
-                    >
-                      <Pencil className="h-4 w-4 shrink-0" />
-                      Editar
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-10 min-h-10 min-w-[6.5rem] flex-1 gap-2 border-2 border-destructive/80 font-semibold text-destructive hover:bg-destructive/10 sm:flex-none sm:min-w-[7rem]"
-                      onClick={() => setExpensePendingDelete(row)}
-                    >
-                      <Trash2 className="h-4 w-4 shrink-0" />
-                      Eliminar
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                      </td>
+                      <td className="whitespace-nowrap p-3 text-right font-semibold tabular-nums text-foreground">
+                        {formatQ(row.amount)}
+                      </td>
+                      <td className="p-3">{paymentBadge(row.paymentMethod)}</td>
+                      <td className="max-w-[220px] p-3 text-muted-foreground">
+                        <span className="line-clamp-2">{row.note?.trim() || "—"}</span>
+                      </td>
+                      <td className="p-2">
+                        <div
+                          role="group"
+                          aria-label="Acciones del gasto"
+                          className="flex items-center justify-center gap-1"
+                        >
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0 text-primary"
+                            title="Ver detalle"
+                            aria-label="Ver detalle del gasto"
+                            onClick={() => void openExpenseDetail(row)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0 text-violet-700 dark:text-violet-300"
+                            title="Editar"
+                            aria-label="Editar gasto"
+                            onClick={() => void openEditExpense(row)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10"
+                            title="Eliminar"
+                            aria-label="Eliminar gasto"
+                            onClick={() => setExpensePendingDelete(row)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
@@ -622,7 +630,7 @@ export function Gastos() {
           <DialogHeader>
             <DialogTitle>Detalle del gasto</DialogTitle>
             <DialogDescription className="sr-only">
-              Datos del gasto en la base de datos
+              Información detallada del gasto
             </DialogDescription>
           </DialogHeader>
           {expenseDetailLoading ? (
@@ -684,7 +692,7 @@ export function Gastos() {
               {editNumericId != null ? `Editar gasto #${editNumericId}` : "Editar gasto"}
             </DialogTitle>
             <DialogDescription>
-              Los cambios se guardan en la base de datos.
+              Modifica los datos y pulsa guardar para aplicar los cambios.
             </DialogDescription>
           </DialogHeader>
           {editLoading ? (
@@ -789,62 +797,11 @@ export function Gastos() {
       >
         <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar este gasto?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <span className="block text-muted-foreground">
-                Vas a quitar este registro de forma permanente. Revisa el resumen y confirma solo
-                si es correcto.
-              </span>
+            <AlertDialogTitle className="sr-only">Eliminar gasto</AlertDialogTitle>
+            <AlertDialogDescription className="text-base text-foreground sm:text-base">
+              ¿Eliminar este gasto? Se eliminará de forma permanente el registro de gasto.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {expensePendingDelete ? (
-            <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground">
-              <p className="font-medium">Resumen</p>
-              <ul className="mt-2 space-y-1">
-                <li>
-                  <span className="text-muted-foreground">Fecha: </span>
-                  {expensePendingDelete.date.toLocaleDateString("es-GT")}
-                </li>
-                <li>
-                  <span className="text-muted-foreground">Categoría: </span>
-                  {categoryNameFromId(
-                    expensePendingDelete.category,
-                    dbCategories,
-                  )}
-                </li>
-                <li>
-                  <span className="text-muted-foreground">Monto: </span>
-                  <span className="font-semibold tabular-nums text-primary">
-                    {formatQ(expensePendingDelete.amount)}
-                  </span>
-                </li>
-                {expensePendingDelete.note?.trim() ? (
-                  <li className="line-clamp-3">
-                    <span className="text-muted-foreground">Nota: </span>
-                    {expensePendingDelete.note}
-                  </li>
-                ) : null}
-                <li>
-                  <span className="text-muted-foreground">Id: </span>
-                  <span className="tabular-nums">{expensePendingDelete.id}</span>
-                  {isServerExpenseId(expensePendingDelete.id) ? (
-                    <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
-                      (servidor)
-                    </span>
-                  ) : (
-                    <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">
-                      (solo sesión)
-                    </span>
-                  )}
-                </li>
-              </ul>
-              <p className="mt-3 text-sm font-medium text-destructive">
-                {isServerExpenseId(expensePendingDelete.id)
-                  ? "Se borrará de la base de datos."
-                  : "Solo se quita de la lista de esta sesión."}
-              </p>
-            </div>
-          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deletingExpense}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -872,7 +829,7 @@ export function Gastos() {
           <DialogHeader>
             <DialogTitle>Nueva categoría de gasto</DialogTitle>
             <DialogDescription>
-              Se guarda en la tabla expense_category de la base de datos.
+              Añade un nombre para usar esta categoría en tus gastos.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">

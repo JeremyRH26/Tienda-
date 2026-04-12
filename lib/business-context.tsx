@@ -4,10 +4,15 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react"
+import {
+  fetchExpenses,
+  type ExpenseDetailDto,
+} from "@/lib/services/expenses.service"
 
 export type AbonoEntry = {
   id: string
@@ -69,9 +74,50 @@ const BusinessContext = createContext<BusinessContextValue | null>(null)
 let abonoSeq = 0
 let expenseSeq = 0
 
+function mapExpenseDtosToEntries(dtos: ExpenseDetailDto[]): ExpenseEntry[] {
+  return dtos.map((d) => {
+    const date = new Date(d.expenseDate + "T12:00:00")
+    return {
+      id: String(d.id),
+      date,
+      category: String(d.categoryId),
+      amount: d.amount,
+      paymentMethod: d.paymentMethod,
+      note: (d.note ?? "").trim(),
+      createdAt: date,
+    }
+  })
+}
+
 export function BusinessProvider({ children }: { children: ReactNode }) {
   const [abonos, setAbonos] = useState<AbonoEntry[]>([])
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    void fetchExpenses()
+      .then((data) => {
+        if (cancelled) return
+        const fromServer = mapExpenseDtosToEntries(data)
+        setExpenses((prev) => {
+          if (prev.length === 0) return fromServer
+          const byId = new Map<string, ExpenseEntry>()
+          for (const e of fromServer) byId.set(e.id, e)
+          for (const e of prev) {
+            if (!byId.has(e.id)) byId.set(e.id, e)
+          }
+          return Array.from(byId.values()).sort(
+            (a, b) => b.date.getTime() - a.date.getTime(),
+          )
+        })
+      })
+      .catch(() => {
+        if (cancelled) return
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const registerAbono = useCallback(
     (entry: {

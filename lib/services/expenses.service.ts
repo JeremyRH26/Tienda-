@@ -5,6 +5,19 @@ export type ExpenseCategoryDto = {
   name: string
 }
 
+/** Listado completo de gastos (para hidratar el estado tras recargar la página). */
+export async function fetchExpenses(): Promise<ExpenseDetailDto[]> {
+  const res = await fetch(`${API_BASE}/expenses`)
+  const json = (await res.json()) as {
+    message?: string
+    data?: ExpenseDetailDto[]
+  }
+  if (!res.ok) {
+    throw new Error(json.message ?? "No se pudieron cargar los gastos.")
+  }
+  return json.data ?? []
+}
+
 export async function fetchExpenseCategories(): Promise<ExpenseCategoryDto[]> {
   const res = await fetch(`${API_BASE}/expenses/categories`)
   const json = (await res.json()) as {
