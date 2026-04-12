@@ -134,7 +134,10 @@ export function Gastos() {
   const [editOpen, setEditOpen] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
   const [editSaving, setEditSaving] = useState(false)
-  const [editId, setEditId] = useState<number | null>(null)
+  /** Id del listado (contexto); coincide con fila de `expenses`. */
+  const [editEntryId, setEditEntryId] = useState<string | null>(null)
+  /** Id numérico en servidor para PATCH; null = solo sesión local. */
+  const [editNumericId, setEditNumericId] = useState<number | null>(null)
   const [editDate, setEditDate] = useState("")
   const [editCategory, setEditCategory] = useState("")
   const [editAmount, setEditAmount] = useState("")
@@ -234,18 +237,33 @@ export function Gastos() {
     }
   }
 
+  const formatDateInput = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${day}`
+  }
+
   const openEditExpense = async (row: ExpenseEntry) => {
+    setEditEntryId(row.id)
+    setEditOpen(true)
+
     if (!isServerExpenseId(row.id)) {
-      toast.error(
-        "Este gasto solo está en la sesión local; no se puede editar en el servidor.",
-      )
+      setEditNumericId(null)
+      setEditLoading(false)
+      setEditDate(formatDateInput(row.date))
+      setEditCategory(row.category)
+      setEditAmount(String(row.amount))
+      setEditPayment(row.paymentMethod)
+      setEditNote(row.note ?? "")
       return
     }
-    setEditOpen(true)
+
+    const numId = Number(row.id)
+    setEditNumericId(numId)
     setEditLoading(true)
-    setEditId(Number(row.id))
     try {
-      const d = await fetchExpenseById(Number(row.id))
+      const d = await fetchExpenseById(numId)
       setEditDate(d.expenseDate)
       setEditCategory(String(d.categoryId))
       setEditAmount(String(d.amount))
@@ -254,14 +272,15 @@ export function Gastos() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo cargar el gasto.")
       setEditOpen(false)
-      setEditId(null)
+      setEditEntryId(null)
+      setEditNumericId(null)
     } finally {
       setEditLoading(false)
     }
   }
 
   const submitEditExpense = async () => {
-    if (editId == null || editSaving) return
+    if (editEntryId == null || editSaving) return
     const categoryId = parseInt(editCategory, 10)
     if (!Number.isFinite(categoryId) || categoryId <= 0) return
     const raw = editAmount.replace(",", ".").trim()
@@ -270,25 +289,32 @@ export function Gastos() {
     const d = new Date(editDate + "T12:00:00")
     if (Number.isNaN(d.getTime())) return
 
+    const patch = {
+      date: d,
+      category: String(categoryId),
+      amount,
+      paymentMethod: editPayment,
+      note: editNote,
+    }
+
     setEditSaving(true)
     try {
-      await updateExpenseApi(editId, {
-        categoryId,
-        expenseDate: editDate,
-        amount,
-        paymentMethod: editPayment,
-        note: editNote,
-      })
-      updateExpense(String(editId), {
-        date: d,
-        category: String(categoryId),
-        amount,
-        paymentMethod: editPayment,
-        note: editNote,
-      })
-      toast.success("Gasto actualizado en la base de datos.")
+      if (editNumericId != null) {
+        await updateExpenseApi(editNumericId, {
+          categoryId,
+          expenseDate: editDate,
+          amount,
+          paymentMethod: editPayment,
+          note: editNote,
+        })
+        toast.success("Gasto actualizado en la base de datos.")
+      } else {
+        toast.success("Gasto actualizado en la sesión.")
+      }
+      updateExpense(editEntryId, patch)
       setEditOpen(false)
-      setEditId(null)
+      setEditEntryId(null)
+      setEditNumericId(null)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo guardar el cambio.")
     } finally {
@@ -498,8 +524,7 @@ export function Gastos() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-base">Listado del mes</CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            Cada gasto es una tarjeta con <strong>Ver</strong>, <strong>Editar</strong> y{" "}
-            <strong>Eliminar</strong> siempre visibles.
+            Ver detalle, editar o eliminar. Al eliminar se pedirá confirmación.
           </p>
         </CardHeader>
         <CardContent className="p-0 sm:p-6 sm:pt-0">
@@ -646,7 +671,8 @@ export function Gastos() {
         onOpenChange={(open) => {
           setEditOpen(open)
           if (!open) {
-            setEditId(null)
+            setEditEntryId(null)
+            setEditNumericId(null)
             setEditLoading(false)
             setEditSaving(false)
           }
@@ -655,7 +681,7 @@ export function Gastos() {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {editId != null ? `Editar gasto #${editId}` : "Editar gasto"}
+              {editNumericId != null ? `Editar gasto #${editNumericId}` : "Editar gasto"}
             </DialogTitle>
             <DialogDescription>
               Los cambios se guardan en la base de datos.
@@ -763,9 +789,12 @@ export function Gastos() {
       >
         <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Seguro que deseas eliminar este gasto? Esta acción no se puede deshacer.
+            <AlertDialogTitle>¿Eliminar este gasto?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <span className="block text-muted-foreground">
+                Vas a quitar este registro de forma permanente. Revisa el resumen y confirma solo
+                si es correcto.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           {expensePendingDelete ? (
