@@ -498,9 +498,8 @@ export function Gastos() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-base">Listado del mes</CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            En móvil, cada gasto es una tarjeta. Desde pantallas medianas, tabla con{" "}
-            <strong>Ver</strong>, <strong>Editar</strong> y <strong>Eliminar</strong> al final
-            de cada fila.
+            Cada gasto es una tarjeta con <strong>Ver</strong>, <strong>Editar</strong> y{" "}
+            <strong>Eliminar</strong> siempre visibles.
           </p>
         </CardHeader>
         <CardContent className="p-0 sm:p-6 sm:pt-0">
@@ -509,153 +508,77 @@ export function Gastos() {
               No hay gastos en este mes.
             </p>
           ) : (
-            <>
-              {/* Solo en viewport estrecho: tarjetas con Ver / Editar / Eliminar */}
-              <div className="space-y-3 px-4 pb-4 pt-2 sm:hidden">
-                {filtered.map((row) => (
-                  <div
-                    key={row.id}
-                    className="rounded-lg border border-border bg-card p-4 shadow-sm"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">
-                          {categoryNameFromId(row.category, dbCategories)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {row.date.toLocaleDateString("es-GT", {
-                            weekday: "short",
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </p>
+            <div className="space-y-3 px-4 pb-4 pt-2 sm:px-0">
+              {filtered.map((row) => (
+                <div
+                  key={row.id}
+                  className="rounded-lg border-2 border-border bg-card p-4 shadow-sm"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-foreground">
+                        {categoryNameFromId(row.category, dbCategories)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {row.date.toLocaleDateString("es-GT", {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {paymentBadge(row.paymentMethod)}
                       </div>
-                      <p className="text-lg font-bold text-primary tabular-nums">
-                        {formatQ(row.amount)}
-                      </p>
+                      {row.note?.trim() ? (
+                        <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                          {row.note}
+                        </p>
+                      ) : null}
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {paymentBadge(row.paymentMethod)}
-                    </div>
-                    {row.note?.trim() ? (
-                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-                        {row.note}
-                      </p>
-                    ) : null}
-                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-h-9 min-w-[5.5rem] shrink-0 gap-1.5 border-2 border-primary bg-background font-semibold text-primary shadow-sm hover:bg-primary/10"
-                        onClick={() => void openExpenseDetail(row)}
-                      >
-                        <Eye className="h-4 w-4 shrink-0" />
-                        Ver
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-h-9 min-w-[5.5rem] shrink-0 gap-1.5 border-2 border-violet-600 bg-background font-semibold text-violet-700 shadow-sm hover:bg-violet-50 dark:border-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40"
-                        onClick={() => void openEditExpense(row)}
-                      >
-                        <Pencil className="h-4 w-4 shrink-0" />
-                        Editar
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="min-h-9 min-w-[5.5rem] shrink-0 gap-1.5 border-2 border-destructive/70 font-semibold text-destructive shadow-sm hover:bg-destructive/10"
-                        onClick={() => setExpensePendingDelete(row)}
-                      >
-                        <Trash2 className="h-4 w-4 shrink-0" />
-                        Eliminar
-                      </Button>
-                    </div>
+                    <p className="text-xl font-bold text-primary tabular-nums">
+                      {formatQ(row.amount)}
+                    </p>
                   </div>
-                ))}
-              </div>
-
-              {/* sm+: tabla (misma fila que en tu captura: datos primero, acciones al final) */}
-              <div className="hidden overflow-x-auto rounded-md border border-border/60 sm:block">
-                <table className="w-full min-w-[720px] border-collapse text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50 text-left">
-                      <th className="p-3 font-medium">Fecha</th>
-                      <th className="p-3 font-medium">Categoría</th>
-                      <th className="p-3 text-right font-medium">Monto</th>
-                      <th className="p-3 font-medium">Pago</th>
-                      <th className="p-3 font-medium">Nota</th>
-                      <th className="sticky right-0 z-[1] w-0 min-w-[200px] border-l border-border bg-muted/50 p-3 text-right font-medium shadow-[inset_1px_0_0_hsl(var(--border))]">
-                        Acciones
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((row) => (
-                      <tr key={row.id} className="border-b last:border-0">
-                        <td className="whitespace-nowrap p-3 text-muted-foreground">
-                          {row.date.toLocaleDateString("es-GT")}
-                        </td>
-                        <td className="max-w-[200px] p-3">
-                          {categoryNameFromId(row.category, dbCategories)}
-                        </td>
-                        <td className="p-3 text-right font-semibold tabular-nums">
-                          {formatQ(row.amount)}
-                        </td>
-                        <td className="p-3">{paymentBadge(row.paymentMethod)}</td>
-                        <td className="max-w-xs p-3 text-muted-foreground">
-                          <span className="line-clamp-2">{row.note || "—"}</span>
-                        </td>
-                        <td className="sticky right-0 z-[1] border-l border-border bg-card p-2 align-middle shadow-[inset_1px_0_0_hsl(var(--border))]">
-                          <div className="flex flex-nowrap items-center justify-end gap-1.5">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-9 shrink-0 gap-1 border-2 border-primary px-2.5 text-xs font-semibold text-primary hover:bg-primary/10"
-                              title="Ver detalle"
-                              aria-label="Ver detalle"
-                              onClick={() => void openExpenseDetail(row)}
-                            >
-                              <Eye className="h-4 w-4 shrink-0" />
-                              <span className="hidden min-[860px]:inline">Ver</span>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-9 shrink-0 gap-1 border-2 border-violet-600 px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40"
-                              title="Editar gasto"
-                              aria-label="Editar"
-                              onClick={() => void openEditExpense(row)}
-                            >
-                              <Pencil className="h-4 w-4 shrink-0" />
-                              <span className="hidden min-[860px]:inline">Editar</span>
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-9 shrink-0 gap-1 border-2 border-destructive/70 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
-                              title="Eliminar gasto"
-                              aria-label="Eliminar"
-                              onClick={() => setExpensePendingDelete(row)}
-                            >
-                              <Trash2 className="h-4 w-4 shrink-0" />
-                              <span className="hidden min-[860px]:inline">Eliminar</span>
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+                  <div
+                    role="group"
+                    aria-label="Acciones del gasto"
+                    className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4"
+                  >
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 min-h-10 min-w-[6.5rem] flex-1 gap-2 border-2 border-primary bg-background font-semibold text-primary sm:flex-none sm:min-w-[7rem]"
+                      onClick={() => void openExpenseDetail(row)}
+                    >
+                      <Eye className="h-4 w-4 shrink-0" />
+                      Ver
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 min-h-10 min-w-[6.5rem] flex-1 gap-2 border-2 border-violet-600 bg-background font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40 sm:flex-none sm:min-w-[7rem]"
+                      onClick={() => void openEditExpense(row)}
+                    >
+                      <Pencil className="h-4 w-4 shrink-0" />
+                      Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 min-h-10 min-w-[6.5rem] flex-1 gap-2 border-2 border-destructive/80 font-semibold text-destructive hover:bg-destructive/10 sm:flex-none sm:min-w-[7rem]"
+                      onClick={() => setExpensePendingDelete(row)}
+                    >
+                      <Trash2 className="h-4 w-4 shrink-0" />
+                      Eliminar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -841,62 +764,58 @@ export function Gastos() {
         <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <p>¿Seguro que deseas eliminar este gasto?</p>
-                {expensePendingDelete ? (
-                  <div className="rounded-lg border border-border bg-muted/40 p-3 text-foreground">
-                    <p className="font-medium text-foreground">
-                      Resumen del gasto
-                    </p>
-                    <ul className="mt-2 space-y-1 text-sm">
-                      <li>
-                        <span className="text-muted-foreground">Fecha: </span>
-                        {expensePendingDelete.date.toLocaleDateString("es-GT")}
-                      </li>
-                      <li>
-                        <span className="text-muted-foreground">Categoría: </span>
-                        {categoryNameFromId(
-                          expensePendingDelete.category,
-                          dbCategories,
-                        )}
-                      </li>
-                      <li>
-                        <span className="text-muted-foreground">Monto: </span>
-                        <span className="font-semibold tabular-nums text-primary">
-                          {formatQ(expensePendingDelete.amount)}
-                        </span>
-                      </li>
-                      {expensePendingDelete.note?.trim() ? (
-                        <li className="line-clamp-3">
-                          <span className="text-muted-foreground">Nota: </span>
-                          {expensePendingDelete.note}
-                        </li>
-                      ) : null}
-                      <li>
-                        <span className="text-muted-foreground">Id en app: </span>
-                        <span className="tabular-nums">{expensePendingDelete.id}</span>
-                        {isServerExpenseId(expensePendingDelete.id) ? (
-                          <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
-                            (registrado en servidor)
-                          </span>
-                        ) : (
-                          <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">
-                            (solo sesión actual)
-                          </span>
-                        )}
-                      </li>
-                    </ul>
-                  </div>
-                ) : null}
-                <p className="font-medium text-destructive">
-                  {expensePendingDelete && isServerExpenseId(expensePendingDelete.id)
-                    ? "Se eliminará permanentemente de la base de datos. No se puede deshacer."
-                    : "Se quitará solo de la lista de esta sesión (no hay fila en el servidor)."}
-                </p>
-              </div>
+            <AlertDialogDescription>
+              ¿Seguro que deseas eliminar este gasto? Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {expensePendingDelete ? (
+            <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground">
+              <p className="font-medium">Resumen</p>
+              <ul className="mt-2 space-y-1">
+                <li>
+                  <span className="text-muted-foreground">Fecha: </span>
+                  {expensePendingDelete.date.toLocaleDateString("es-GT")}
+                </li>
+                <li>
+                  <span className="text-muted-foreground">Categoría: </span>
+                  {categoryNameFromId(
+                    expensePendingDelete.category,
+                    dbCategories,
+                  )}
+                </li>
+                <li>
+                  <span className="text-muted-foreground">Monto: </span>
+                  <span className="font-semibold tabular-nums text-primary">
+                    {formatQ(expensePendingDelete.amount)}
+                  </span>
+                </li>
+                {expensePendingDelete.note?.trim() ? (
+                  <li className="line-clamp-3">
+                    <span className="text-muted-foreground">Nota: </span>
+                    {expensePendingDelete.note}
+                  </li>
+                ) : null}
+                <li>
+                  <span className="text-muted-foreground">Id: </span>
+                  <span className="tabular-nums">{expensePendingDelete.id}</span>
+                  {isServerExpenseId(expensePendingDelete.id) ? (
+                    <span className="ml-1 text-xs text-emerald-600 dark:text-emerald-400">
+                      (servidor)
+                    </span>
+                  ) : (
+                    <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">
+                      (solo sesión)
+                    </span>
+                  )}
+                </li>
+              </ul>
+              <p className="mt-3 text-sm font-medium text-destructive">
+                {isServerExpenseId(expensePendingDelete.id)
+                  ? "Se borrará de la base de datos."
+                  : "Solo se quita de la lista de esta sesión."}
+              </p>
+            </div>
+          ) : null}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deletingExpense}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
