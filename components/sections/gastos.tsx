@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,31 +20,47 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Wallet, Plus, Trash2, Banknote, Landmark, CalendarDays } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  Wallet,
+  Plus,
+  Trash2,
+  Banknote,
+  Landmark,
+  CalendarDays,
+  Eye,
+  Pencil,
+} from "lucide-react"
 import { formatQ } from "@/lib/currency"
 import { useBusiness, type ExpenseEntry } from "@/lib/business-context"
+import {
+  createExpense,
+  createExpenseCategory,
+  deleteExpense,
+  fetchExpenseById,
+  fetchExpenseCategories,
+  updateExpense as updateExpenseApi,
+  type ExpenseCategoryDto,
+  type ExpenseDetailDto,
+} from "@/lib/services/expenses.service"
 import { Badge } from "@/components/ui/badge"
 
-const EXPENSE_CATEGORIES: { id: string; label: string }[] = [
-  { id: "servicios_publicos", label: "Servicios públicos" },
-  { id: "compra_insumos", label: "Compra de productos e insumos" },
-  { id: "arriendo", label: "Arriendo" },
-  { id: "nomina", label: "Nómina" },
-  { id: "administrativos", label: "Gastos administrativos" },
-  { id: "transporte_logistica", label: "Transporte y logística" },
-  { id: "muebles_equipo", label: "Muebles, equipo o maquinaria" },
-  { id: "otros", label: "Otros" },
-]
-
-function categoryLabel(
-  id: string,
-  custom: { id: string; label: string }[]
+function categoryNameFromId(
+  categoryIdStr: string,
+  list: ExpenseCategoryDto[],
 ): string {
-  return (
-    EXPENSE_CATEGORIES.find((c) => c.id === id)?.label ??
-    custom.find((c) => c.id === id)?.label ??
-    id
-  )
+  const id = Number(categoryIdStr)
+  const row = list.find((c) => c.id === id)
+  return row?.name ?? `Categoría #${categoryIdStr}`
 }
 
 function sameMonth(a: Date, b: Date): boolean {
@@ -61,16 +78,38 @@ function parseMonthValue(v: string): Date {
   return new Date(y, (m || 1) - 1, 1)
 }
 
+/** Id numérico devuelto por la API al crear el gasto en la BD. */
+function isServerExpenseId(id: string): boolean {
+  return /^\d+$/.test(id.trim())
+}
+
 export function Gastos() {
-  const { expenses, registerExpense, removeExpense } = useBusiness()
+  const { expenses, registerExpense, removeExpense, updateExpense } = useBusiness()
   const [filterMonth, setFilterMonth] = useState(() => monthValue(new Date()))
-  const [customExpenseCategories, setCustomExpenseCategories] = useState<
-    { id: string; label: string }[]
-  >([])
+  const [dbCategories, setDbCategories] = useState<ExpenseCategoryDto[]>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [showExpenseCategoryDialog, setShowExpenseCategoryDialog] = useState(false)
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState("")
+  const [savingCategory, setSavingCategory] = useState(false)
 
-  const allExpenseCategories = [...EXPENSE_CATEGORIES, ...customExpenseCategories]
+  const loadCategories = useCallback(async () => {
+    setCategoriesLoading(true)
+    try {
+      const list = await fetchExpenseCategories()
+      setDbCategories(list)
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "No se pudieron cargar las categorías.",
+      )
+      setDbCategories([])
+    } finally {
+      setCategoriesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadCategories()
+  }, [loadCategories])
 
   const [formDate, setFormDate] = useState(() => {
     const t = new Date()
@@ -82,6 +121,27 @@ export function Gastos() {
     "efectivo"
   )
   const [formNote, setFormNote] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  const [expenseDetailOpen, setExpenseDetailOpen] = useState(false)
+  const [expenseDetailLoading, setExpenseDetailLoading] = useState(false)
+  const [expenseDetail, setExpenseDetail] = useState<ExpenseDetailDto | null>(null)
+
+  const [expensePendingDelete, setExpensePendingDelete] =
+    useState<ExpenseEntry | null>(null)
+  const [deletingExpense, setDeletingExpense] = useState(false)
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editId, setEditId] = useState<number | null>(null)
+  const [editDate, setEditDate] = useState("")
+  const [editCategory, setEditCategory] = useState("")
+  const [editAmount, setEditAmount] = useState("")
+  const [editPayment, setEditPayment] = useState<"efectivo" | "transferencia">(
+    "efectivo",
+  )
+  const [editNote, setEditNote] = useState("")
 
   const filterRef = useMemo(() => parseMonthValue(filterMonth), [filterMonth])
 
@@ -95,32 +155,166 @@ export function Gastos() {
     [filtered]
   )
 
-  const saveNewExpenseCategory = () => {
+  const saveNewExpenseCategory = async () => {
     const label = newExpenseCategoryName.trim()
-    if (!label) return
-    const id = `cat_${Date.now()}`
-    setCustomExpenseCategories((prev) => [...prev, { id, label }])
-    setFormCategory(id)
-    setShowExpenseCategoryDialog(false)
-    setNewExpenseCategoryName("")
+    if (!label || savingCategory) return
+    setSavingCategory(true)
+    try {
+      const created = await createExpenseCategory(label)
+      await loadCategories()
+      setFormCategory(String(created.id))
+      setShowExpenseCategoryDialog(false)
+      setNewExpenseCategoryName("")
+      toast.success("Categoría guardada en la base de datos.")
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo crear la categoría.",
+      )
+    } finally {
+      setSavingCategory(false)
+    }
   }
 
-  const handleAdd = () => {
-    if (!formCategory) return
+  const handleAdd = async () => {
+    if (!formCategory || saving) return
     const raw = formAmount.replace(",", ".").trim()
     const amount = parseFloat(raw)
     if (!Number.isFinite(amount) || amount <= 0) return
     const d = new Date(formDate + "T12:00:00")
     if (Number.isNaN(d.getTime())) return
-    registerExpense({
-      date: d,
-      category: formCategory,
-      amount,
-      paymentMethod: formPayment,
-      note: formNote,
-    })
-    setFormAmount("")
-    setFormNote("")
+
+    const categoryId = parseInt(formCategory, 10)
+    if (!Number.isFinite(categoryId) || categoryId <= 0) return
+
+    setSaving(true)
+    try {
+      const { expenseId } = await createExpense({
+        categoryId,
+        expenseDate: formDate,
+        amount,
+        paymentMethod: formPayment,
+        note: formNote,
+      })
+      registerExpense({
+        id: String(expenseId),
+        date: d,
+        category: String(categoryId),
+        amount,
+        paymentMethod: formPayment,
+        note: formNote,
+      })
+      toast.success("Gasto guardado en la base de datos.")
+      setFormAmount("")
+      setFormNote("")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar el gasto.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const openExpenseDetail = async (row: ExpenseEntry) => {
+    if (!isServerExpenseId(row.id)) {
+      toast.error(
+        "Este gasto solo está en la sesión local; registra uno nuevo para verlo en el servidor.",
+      )
+      return
+    }
+    setExpenseDetailOpen(true)
+    setExpenseDetailLoading(true)
+    setExpenseDetail(null)
+    try {
+      const d = await fetchExpenseById(Number(row.id))
+      setExpenseDetail(d)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cargar el detalle.")
+      setExpenseDetailOpen(false)
+    } finally {
+      setExpenseDetailLoading(false)
+    }
+  }
+
+  const openEditExpense = async (row: ExpenseEntry) => {
+    if (!isServerExpenseId(row.id)) {
+      toast.error(
+        "Este gasto solo está en la sesión local; no se puede editar en el servidor.",
+      )
+      return
+    }
+    setEditOpen(true)
+    setEditLoading(true)
+    setEditId(Number(row.id))
+    try {
+      const d = await fetchExpenseById(Number(row.id))
+      setEditDate(d.expenseDate)
+      setEditCategory(String(d.categoryId))
+      setEditAmount(String(d.amount))
+      setEditPayment(d.paymentMethod)
+      setEditNote(d.note ?? "")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cargar el gasto.")
+      setEditOpen(false)
+      setEditId(null)
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  const submitEditExpense = async () => {
+    if (editId == null || editSaving) return
+    const categoryId = parseInt(editCategory, 10)
+    if (!Number.isFinite(categoryId) || categoryId <= 0) return
+    const raw = editAmount.replace(",", ".").trim()
+    const amount = parseFloat(raw)
+    if (!Number.isFinite(amount) || amount <= 0) return
+    const d = new Date(editDate + "T12:00:00")
+    if (Number.isNaN(d.getTime())) return
+
+    setEditSaving(true)
+    try {
+      await updateExpenseApi(editId, {
+        categoryId,
+        expenseDate: editDate,
+        amount,
+        paymentMethod: editPayment,
+        note: editNote,
+      })
+      updateExpense(String(editId), {
+        date: d,
+        category: String(categoryId),
+        amount,
+        paymentMethod: editPayment,
+        note: editNote,
+      })
+      toast.success("Gasto actualizado en la base de datos.")
+      setEditOpen(false)
+      setEditId(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar el cambio.")
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const confirmDeleteExpense = async () => {
+    const row = expensePendingDelete
+    if (!row || deletingExpense) return
+    setDeletingExpense(true)
+    try {
+      if (isServerExpenseId(row.id)) {
+        await deleteExpense(Number(row.id))
+        removeExpense(row.id)
+        toast.success("Gasto eliminado de la base de datos.")
+      } else {
+        removeExpense(row.id)
+        toast.success("Eliminado del listado local.")
+      }
+      setExpensePendingDelete(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo eliminar el gasto.")
+    } finally {
+      setDeletingExpense(false)
+    }
   }
 
   const paymentBadge = (m: ExpenseEntry["paymentMethod"]) =>
@@ -211,14 +405,26 @@ export function Gastos() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Categoría</label>
               <div className="flex gap-2">
-                <Select value={formCategory} onValueChange={setFormCategory}>
+                <Select
+                  value={formCategory}
+                  onValueChange={setFormCategory}
+                  disabled={categoriesLoading || dbCategories.length === 0}
+                >
                   <SelectTrigger className="h-11 flex-1">
-                    <SelectValue placeholder="Seleccione categoría" />
+                    <SelectValue
+                      placeholder={
+                        categoriesLoading
+                          ? "Cargando categorías…"
+                          : dbCategories.length === 0
+                            ? "Cree una categoría primero"
+                            : "Seleccione categoría"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {allExpenseCategories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.label}
+                    {dbCategories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -276,11 +482,13 @@ export function Gastos() {
             <Button
               type="button"
               className="h-11 w-full gap-2 sm:w-auto"
-              disabled={!formCategory}
-              onClick={handleAdd}
+              disabled={
+                !formCategory || saving || categoriesLoading || dbCategories.length === 0
+              }
+              onClick={() => void handleAdd()}
             >
               <Plus className="h-4 w-4" />
-              Registrar gasto
+              {saving ? "Guardando…" : "Registrar gasto"}
             </Button>
           </CardContent>
         </Card>
@@ -300,13 +508,13 @@ export function Gastos() {
                   <th className="p-3 text-right font-medium">Monto</th>
                   <th className="p-3 font-medium">Pago</th>
                   <th className="p-3 font-medium">Nota</th>
-                  <th className="w-12 p-3" />
+                  <th className="w-36 p-3 text-right font-medium">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
                       No hay gastos en este mes.
                     </td>
                   </tr>
@@ -317,7 +525,7 @@ export function Gastos() {
                         {row.date.toLocaleDateString("es-GT")}
                       </td>
                       <td className="max-w-[200px] p-3">
-                        {categoryLabel(row.category, customExpenseCategories)}
+                        {categoryNameFromId(row.category, dbCategories)}
                       </td>
                       <td className="p-3 text-right font-semibold tabular-nums">
                         {formatQ(row.amount)}
@@ -327,16 +535,50 @@ export function Gastos() {
                         <span className="line-clamp-2">{row.note || "—"}</span>
                       </td>
                       <td className="p-3">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          aria-label="Eliminar gasto"
-                          onClick={() => removeExpense(row.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            aria-label="Ver detalle del gasto"
+                            disabled={!isServerExpenseId(row.id)}
+                            title={
+                              isServerExpenseId(row.id)
+                                ? "Ver detalle"
+                                : "Sin detalle en servidor"
+                            }
+                            onClick={() => void openExpenseDetail(row)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground"
+                            aria-label="Editar gasto"
+                            disabled={!isServerExpenseId(row.id)}
+                            title={
+                              isServerExpenseId(row.id)
+                                ? "Editar"
+                                : "Sin edición en servidor"
+                            }
+                            onClick={() => void openEditExpense(row)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            aria-label="Eliminar gasto"
+                            onClick={() => setExpensePendingDelete(row)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -348,6 +590,209 @@ export function Gastos() {
       </Card>
 
       <Dialog
+        open={expenseDetailOpen}
+        onOpenChange={(open) => {
+          setExpenseDetailOpen(open)
+          if (!open) {
+            setExpenseDetail(null)
+            setExpenseDetailLoading(false)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalle del gasto</DialogTitle>
+            <DialogDescription className="sr-only">
+              Datos del gasto en la base de datos
+            </DialogDescription>
+          </DialogHeader>
+          {expenseDetailLoading ? (
+            <p className="py-6 text-sm text-muted-foreground">Cargando…</p>
+          ) : expenseDetail ? (
+            <div className="grid gap-3 py-2 text-sm">
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Id</span>
+                <span className="font-medium tabular-nums">#{expenseDetail.id}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Categoría</span>
+                <span className="text-right font-medium">{expenseDetail.categoryName}</span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Fecha</span>
+                <span className="font-medium">
+                  {new Date(expenseDetail.expenseDate + "T12:00:00").toLocaleDateString(
+                    "es-GT",
+                  )}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Monto</span>
+                <span className="font-semibold text-primary tabular-nums">
+                  {formatQ(expenseDetail.amount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Pago</span>
+                <span>{paymentBadge(expenseDetail.paymentMethod)}</span>
+              </div>
+              <div className="rounded-md border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground">Nota</p>
+                <p className="mt-1 whitespace-pre-wrap">
+                  {expenseDetail.note?.trim() ? expenseDetail.note : "—"}
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editOpen}
+        onOpenChange={(open) => {
+          setEditOpen(open)
+          if (!open) {
+            setEditId(null)
+            setEditLoading(false)
+            setEditSaving(false)
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {editId != null ? `Editar gasto #${editId}` : "Editar gasto"}
+            </DialogTitle>
+            <DialogDescription>
+              Los cambios se guardan en la base de datos.
+            </DialogDescription>
+          </DialogHeader>
+          {editLoading ? (
+            <p className="py-6 text-sm text-muted-foreground">Cargando…</p>
+          ) : (
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Fecha</label>
+                  <Input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Monto (Q)</label>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="h-11"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Categoría</label>
+                <Select
+                  value={editCategory}
+                  onValueChange={setEditCategory}
+                  disabled={categoriesLoading || dbCategories.length === 0}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue placeholder="Categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dbCategories.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Método de pago</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={editPayment === "efectivo" ? "default" : "outline"}
+                    className="h-12 gap-2"
+                    onClick={() => setEditPayment("efectivo")}
+                  >
+                    <Banknote className="h-4 w-4" />
+                    Efectivo
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={editPayment === "transferencia" ? "default" : "outline"}
+                    className="h-12 gap-2"
+                    onClick={() => setEditPayment("transferencia")}
+                  >
+                    <Landmark className="h-4 w-4" />
+                    Transferencia
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nota / comprobante</label>
+                <Textarea
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  className="min-h-[100px] resize-y"
+                />
+              </div>
+              <Button
+                type="button"
+                className="h-11 w-full"
+                disabled={
+                  editSaving ||
+                  !editCategory ||
+                  categoriesLoading ||
+                  dbCategories.length === 0
+                }
+                onClick={() => void submitEditExpense()}
+              >
+                {editSaving ? "Guardando…" : "Guardar cambios"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog
+        open={expensePendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deletingExpense) setExpensePendingDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este gasto?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {expensePendingDelete && isServerExpenseId(expensePendingDelete.id)
+                ? "Se borrará el registro en la base de datos. Esta acción no se puede deshacer."
+                : "Se quitará solo del listado de esta sesión."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingExpense}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deletingExpense}
+              onClick={(e) => {
+                e.preventDefault()
+                void confirmDeleteExpense()
+              }}
+            >
+              {deletingExpense ? "Eliminando…" : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
         open={showExpenseCategoryDialog}
         onOpenChange={(open) => {
           setShowExpenseCategoryDialog(open)
@@ -357,7 +802,9 @@ export function Gastos() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Nueva categoría de gasto</DialogTitle>
-            <DialogDescription>Solo se guarda el nombre para clasificar gastos.</DialogDescription>
+            <DialogDescription>
+              Se guarda en la tabla expense_category de la base de datos.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="space-y-2">
@@ -370,13 +817,18 @@ export function Gastos() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault()
-                    saveNewExpenseCategory()
+                    void saveNewExpenseCategory()
                   }
                 }}
               />
             </div>
-            <Button type="button" className="h-11 w-full" onClick={saveNewExpenseCategory}>
-              Agregar categoría
+            <Button
+              type="button"
+              className="h-11 w-full"
+              disabled={savingCategory}
+              onClick={() => void saveNewExpenseCategory()}
+            >
+              {savingCategory ? "Guardando…" : "Agregar categoría"}
             </Button>
           </div>
         </DialogContent>

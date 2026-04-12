@@ -48,8 +48,20 @@ type BusinessContextValue = {
     amount: number
     paymentMethod: "efectivo" | "transferencia"
     note: string
+    /** Si viene del servidor (p. ej. id numérico de `expense`). */
+    id?: string
   }) => void
   removeExpense: (id: string) => void
+  updateExpense: (
+    id: string,
+    patch: {
+      date: Date
+      category: ExpenseCategoryId
+      amount: number
+      paymentMethod: "efectivo" | "transferencia"
+      note: string
+    },
+  ) => void
 }
 
 const BusinessContext = createContext<BusinessContextValue | null>(null)
@@ -93,9 +105,13 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       amount: number
       paymentMethod: "efectivo" | "transferencia"
       note: string
+      id?: string
     }) => {
       expenseSeq += 1
-      const id = `gasto-${Date.now()}-${expenseSeq}`
+      const id =
+        entry.id != null && entry.id !== ""
+          ? entry.id
+          : `gasto-${Date.now()}-${expenseSeq}`
       const now = new Date()
       setExpenses((prev) => [
         {
@@ -117,6 +133,35 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setExpenses((prev) => prev.filter((e) => e.id !== id))
   }, [])
 
+  const updateExpense = useCallback(
+    (
+      id: string,
+      patch: {
+        date: Date
+        category: ExpenseCategoryId
+        amount: number
+        paymentMethod: "efectivo" | "transferencia"
+        note: string
+      },
+    ) => {
+      setExpenses((prev) =>
+        prev.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                date: patch.date,
+                category: patch.category,
+                amount: Math.round(patch.amount * 100) / 100,
+                paymentMethod: patch.paymentMethod,
+                note: patch.note.trim(),
+              }
+            : e,
+        ),
+      )
+    },
+    [],
+  )
+
   const value = useMemo(
     () => ({
       abonos,
@@ -124,8 +169,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       expenses,
       registerExpense,
       removeExpense,
+      updateExpense,
     }),
-    [abonos, registerAbono, expenses, registerExpense, removeExpense]
+    [abonos, registerAbono, expenses, registerExpense, removeExpense, updateExpense]
   )
 
   return (
