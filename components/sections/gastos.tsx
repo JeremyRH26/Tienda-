@@ -498,9 +498,9 @@ export function Gastos() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-base">Listado del mes</CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            En pantallas medianas verás cada gasto en tarjeta con <strong>Ver</strong>,{" "}
-            <strong>Editar</strong> y <strong>Eliminar</strong>. En pantallas grandes, la
-            misma información en tabla.
+            En móvil, cada gasto es una tarjeta. Desde pantallas medianas, tabla con{" "}
+            <strong>Ver</strong>, <strong>Editar</strong> y <strong>Eliminar</strong> al final
+            de cada fila.
           </p>
         </CardHeader>
         <CardContent className="p-0 sm:p-6 sm:pt-0">
@@ -510,8 +510,8 @@ export function Gastos() {
             </p>
           ) : (
             <>
-              {/* Móvil: tarjetas — acciones siempre visibles */}
-              <div className="space-y-3 px-4 pb-4 pt-2 lg:hidden">
+              {/* Solo en viewport estrecho: tarjetas con Ver / Editar / Eliminar */}
+              <div className="space-y-3 px-4 pb-4 pt-2 sm:hidden">
                 {filtered.map((row) => (
                   <div
                     key={row.id}
@@ -579,61 +579,24 @@ export function Gastos() {
                 ))}
               </div>
 
-              {/* Escritorio: tabla con columna Acciones a la izquierda (sin depender del scroll) */}
-              <div className="hidden overflow-x-auto rounded-md border border-border/60 lg:block">
-                <table className="w-full text-sm">
+              {/* sm+: tabla (misma fila que en tu captura: datos primero, acciones al final) */}
+              <div className="hidden overflow-x-auto rounded-md border border-border/60 sm:block">
+                <table className="w-full min-w-[720px] border-collapse text-sm">
                   <thead>
                     <tr className="border-b bg-muted/50 text-left">
-                      <th className="w-[220px] min-w-[220px] whitespace-nowrap p-3 font-medium">
-                        Acciones
-                      </th>
                       <th className="p-3 font-medium">Fecha</th>
                       <th className="p-3 font-medium">Categoría</th>
                       <th className="p-3 text-right font-medium">Monto</th>
                       <th className="p-3 font-medium">Pago</th>
                       <th className="p-3 font-medium">Nota</th>
+                      <th className="sticky right-0 z-[1] w-0 min-w-[200px] border-l border-border bg-muted/50 p-3 text-right font-medium shadow-[inset_1px_0_0_hsl(var(--border))]">
+                        Acciones
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map((row) => (
                       <tr key={row.id} className="border-b last:border-0">
-                        <td className="min-w-[220px] p-2 align-middle">
-                          <div className="flex flex-col gap-1.5">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-9 w-full justify-center gap-1 border-2 border-primary text-xs font-semibold text-primary hover:bg-primary/10"
-                              aria-label="Ver detalle"
-                              onClick={() => void openExpenseDetail(row)}
-                            >
-                              <Eye className="h-3.5 w-3.5 shrink-0" />
-                              Ver
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-9 w-full justify-center gap-1 border-2 border-violet-600 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40"
-                              aria-label="Editar"
-                              onClick={() => void openEditExpense(row)}
-                            >
-                              <Pencil className="h-3.5 w-3.5 shrink-0" />
-                              Editar
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-9 w-full justify-center gap-1 border-2 border-destructive/70 text-xs font-semibold text-destructive hover:bg-destructive/10"
-                              aria-label="Eliminar"
-                              onClick={() => setExpensePendingDelete(row)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 shrink-0" />
-                              Eliminar
-                            </Button>
-                          </div>
-                        </td>
                         <td className="whitespace-nowrap p-3 text-muted-foreground">
                           {row.date.toLocaleDateString("es-GT")}
                         </td>
@@ -646,6 +609,46 @@ export function Gastos() {
                         <td className="p-3">{paymentBadge(row.paymentMethod)}</td>
                         <td className="max-w-xs p-3 text-muted-foreground">
                           <span className="line-clamp-2">{row.note || "—"}</span>
+                        </td>
+                        <td className="sticky right-0 z-[1] border-l border-border bg-card p-2 align-middle shadow-[inset_1px_0_0_hsl(var(--border))]">
+                          <div className="flex flex-nowrap items-center justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 shrink-0 gap-1 border-2 border-primary px-2.5 text-xs font-semibold text-primary hover:bg-primary/10"
+                              title="Ver detalle"
+                              aria-label="Ver detalle"
+                              onClick={() => void openExpenseDetail(row)}
+                            >
+                              <Eye className="h-4 w-4 shrink-0" />
+                              <span className="hidden min-[860px]:inline">Ver</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 shrink-0 gap-1 border-2 border-violet-600 px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                              title="Editar gasto"
+                              aria-label="Editar"
+                              onClick={() => void openEditExpense(row)}
+                            >
+                              <Pencil className="h-4 w-4 shrink-0" />
+                              <span className="hidden min-[860px]:inline">Editar</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 shrink-0 gap-1 border-2 border-destructive/70 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                              title="Eliminar gasto"
+                              aria-label="Eliminar"
+                              onClick={() => setExpensePendingDelete(row)}
+                            >
+                              <Trash2 className="h-4 w-4 shrink-0" />
+                              <span className="hidden min-[860px]:inline">Eliminar</span>
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}

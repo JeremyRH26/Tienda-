@@ -135,6 +135,7 @@ CREATE TABLE customer_account (
 );
 -- -----------------------------------------------------------------------------
 -- Expenses (gastos)
+-- En MySQL los id deben ser AUTO_INCREMENT para INSERT sin id (ver backend db/fix_mysql_expense_id_autoincrement.sql).
 -- -----------------------------------------------------------------------------
 CREATE TABLE expense_category (
   id          int PRIMARY KEY,
