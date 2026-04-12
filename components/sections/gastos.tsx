@@ -498,99 +498,162 @@ export function Gastos() {
         <CardHeader className="space-y-1">
           <CardTitle className="text-base">Listado del mes</CardTitle>
           <p className="text-xs text-muted-foreground sm:text-sm">
-            Ver, editar y eliminar: si la tabla es ancha, desplázate horizontalmente; la
-            columna de acciones permanece visible a la derecha.
+            En pantallas medianas verás cada gasto en tarjeta con <strong>Ver</strong>,{" "}
+            <strong>Editar</strong> y <strong>Eliminar</strong>. En pantallas grandes, la
+            misma información en tabla.
           </p>
         </CardHeader>
         <CardContent className="p-0 sm:p-6 sm:pt-0">
-          <div className="overflow-x-auto rounded-md border border-border/60">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50 text-left">
-                  <th className="p-3 font-medium">Fecha</th>
-                  <th className="p-3 font-medium">Categoría</th>
-                  <th className="p-3 text-right font-medium">Monto</th>
-                  <th className="p-3 font-medium">Pago</th>
-                  <th className="p-3 font-medium">Nota</th>
-                  <th className="sticky right-0 z-20 w-[132px] min-w-[132px] border-l border-border bg-muted/95 p-3 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground backdrop-blur-sm sm:text-sm sm:normal-case">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                      No hay gastos en este mes.
-                    </td>
-                  </tr>
-                ) : (
-                  filtered.map((row) => (
-                    <tr key={row.id} className="border-b last:border-0">
-                      <td className="p-3 whitespace-nowrap text-muted-foreground">
-                        {row.date.toLocaleDateString("es-GT")}
-                      </td>
-                      <td className="max-w-[200px] p-3">
-                        {categoryNameFromId(row.category, dbCategories)}
-                      </td>
-                      <td className="p-3 text-right font-semibold tabular-nums">
+          {filtered.length === 0 ? (
+            <p className="px-6 py-10 text-center text-sm text-muted-foreground">
+              No hay gastos en este mes.
+            </p>
+          ) : (
+            <>
+              {/* Móvil: tarjetas — acciones siempre visibles */}
+              <div className="space-y-3 px-4 pb-4 pt-2 lg:hidden">
+                {filtered.map((row) => (
+                  <div
+                    key={row.id}
+                    className="rounded-lg border border-border bg-card p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          {categoryNameFromId(row.category, dbCategories)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {row.date.toLocaleDateString("es-GT", {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                      <p className="text-lg font-bold text-primary tabular-nums">
                         {formatQ(row.amount)}
-                      </td>
-                      <td className="p-3">{paymentBadge(row.paymentMethod)}</td>
-                      <td className="max-w-xs p-3 text-muted-foreground">
-                        <span className="line-clamp-2">{row.note || "—"}</span>
-                      </td>
-                      <td className="sticky right-0 z-10 w-[132px] min-w-[132px] border-l border-border bg-card p-2 align-middle shadow-[-6px_0_12px_-6px_rgba(0,0,0,0.12)] dark:shadow-[-6px_0_12px_-6px_rgba(0,0,0,0.4)]">
-                        <div className="flex flex-wrap items-center justify-end gap-1">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9 shrink-0"
-                            aria-label="Ver detalle del gasto"
-                            title={
-                              isServerExpenseId(row.id)
-                                ? "Ver detalle en servidor"
-                                : "Solo en esta sesión (sin detalle en BD)"
-                            }
-                            onClick={() => void openExpenseDetail(row)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9 shrink-0"
-                            aria-label="Editar gasto"
-                            title={
-                              isServerExpenseId(row.id)
-                                ? "Editar en servidor"
-                                : "Solo en esta sesión (sin editar en BD)"
-                            }
-                            onClick={() => void openEditExpense(row)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            className="h-9 w-9 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            aria-label="Eliminar gasto"
-                            title="Eliminar"
-                            onClick={() => setExpensePendingDelete(row)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
+                      </p>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {paymentBadge(row.paymentMethod)}
+                    </div>
+                    {row.note?.trim() ? (
+                      <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">
+                        {row.note}
+                      </p>
+                    ) : null}
+                    <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-9 min-w-[5.5rem] shrink-0 gap-1.5 border-2 border-primary bg-background font-semibold text-primary shadow-sm hover:bg-primary/10"
+                        onClick={() => void openExpenseDetail(row)}
+                      >
+                        <Eye className="h-4 w-4 shrink-0" />
+                        Ver
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-9 min-w-[5.5rem] shrink-0 gap-1.5 border-2 border-violet-600 bg-background font-semibold text-violet-700 shadow-sm hover:bg-violet-50 dark:border-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                        onClick={() => void openEditExpense(row)}
+                      >
+                        <Pencil className="h-4 w-4 shrink-0" />
+                        Editar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-9 min-w-[5.5rem] shrink-0 gap-1.5 border-2 border-destructive/70 font-semibold text-destructive shadow-sm hover:bg-destructive/10"
+                        onClick={() => setExpensePendingDelete(row)}
+                      >
+                        <Trash2 className="h-4 w-4 shrink-0" />
+                        Eliminar
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Escritorio: tabla con columna Acciones a la izquierda (sin depender del scroll) */}
+              <div className="hidden overflow-x-auto rounded-md border border-border/60 lg:block">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50 text-left">
+                      <th className="w-[220px] min-w-[220px] whitespace-nowrap p-3 font-medium">
+                        Acciones
+                      </th>
+                      <th className="p-3 font-medium">Fecha</th>
+                      <th className="p-3 font-medium">Categoría</th>
+                      <th className="p-3 text-right font-medium">Monto</th>
+                      <th className="p-3 font-medium">Pago</th>
+                      <th className="p-3 font-medium">Nota</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {filtered.map((row) => (
+                      <tr key={row.id} className="border-b last:border-0">
+                        <td className="min-w-[220px] p-2 align-middle">
+                          <div className="flex flex-col gap-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-full justify-center gap-1 border-2 border-primary text-xs font-semibold text-primary hover:bg-primary/10"
+                              aria-label="Ver detalle"
+                              onClick={() => void openExpenseDetail(row)}
+                            >
+                              <Eye className="h-3.5 w-3.5 shrink-0" />
+                              Ver
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-full justify-center gap-1 border-2 border-violet-600 text-xs font-semibold text-violet-700 hover:bg-violet-50 dark:border-violet-400 dark:text-violet-300 dark:hover:bg-violet-950/40"
+                              aria-label="Editar"
+                              onClick={() => void openEditExpense(row)}
+                            >
+                              <Pencil className="h-3.5 w-3.5 shrink-0" />
+                              Editar
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 w-full justify-center gap-1 border-2 border-destructive/70 text-xs font-semibold text-destructive hover:bg-destructive/10"
+                              aria-label="Eliminar"
+                              onClick={() => setExpensePendingDelete(row)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                              Eliminar
+                            </Button>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap p-3 text-muted-foreground">
+                          {row.date.toLocaleDateString("es-GT")}
+                        </td>
+                        <td className="max-w-[200px] p-3">
+                          {categoryNameFromId(row.category, dbCategories)}
+                        </td>
+                        <td className="p-3 text-right font-semibold tabular-nums">
+                          {formatQ(row.amount)}
+                        </td>
+                        <td className="p-3">{paymentBadge(row.paymentMethod)}</td>
+                        <td className="max-w-xs p-3 text-muted-foreground">
+                          <span className="line-clamp-2">{row.note || "—"}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

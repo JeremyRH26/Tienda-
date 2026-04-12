@@ -1,3 +1,8 @@
+import path from "path"
+import { fileURLToPath } from "url"
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 /**
  * Nota: minificar / optimizar el output de `next build` no baja la RAM de `next dev`.
  * En dev, Next recompila en caliente (Turbopack) sin usar ese bundle minificado.
@@ -7,6 +12,12 @@
  */
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /**
+   * Si existe otro package-lock.json más arriba (p. ej. en el home del usuario),
+   * Next puede inferir mal la raíz del workspace. Fijamos la raíz de tracing a esta app.
+   * @see https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats
+   */
+  outputFileTracingRoot: __dirname,
   /** Acceso al dev server desde otra máquina / IP en la red (HMR). */
   allowedDevOrigins: ["*"],
   typescript: {
