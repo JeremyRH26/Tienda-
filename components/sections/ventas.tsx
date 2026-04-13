@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,9 +9,7 @@ import {
   Plus,
   Minus,
   Trash2,
-  CreditCard,
   Banknote,
-  User,
   ShoppingCart,
   Receipt,
   Clock,
@@ -24,7 +22,11 @@ import {
   TrendingUp,
   Scale,
 } from "lucide-react"
-import { mockProducts, mockCustomers, mockSalesHistoryExtended, type SaleRecord } from "@/lib/mock-data"
+import { mockProducts, mockSalesHistoryExtended, type SaleRecord } from "@/lib/mock-data"
+import {
+  fetchInventoryProducts,
+  type InventoryProductDto,
+} from "@/lib/services/inventory.service"
 import { formatQ, isSameCalendarDay } from "@/lib/currency"
 import { useBusiness, type AbonoEntry } from "@/lib/business-context"
 import {
@@ -32,7 +34,11 @@ import {
   formatSalesHistoryPeriodCaption,
   type SalesPrintPeriod,
 } from "@/lib/sales-period"
-import { aggregateProfitForSales, saleProfitBreakdown } from "@/lib/sale-profit"
+import {
+  aggregateProfitForSales,
+  saleProfitBreakdown,
+  type CatalogProduct,
+} from "@/lib/sale-profit"
 import { downloadSalesListPdf, downloadSaleReceiptPdf } from "@/lib/pdf-reports"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -43,13 +49,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -69,8 +68,31 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+/** Producto del POS: misma forma que el grid necesita (viene del inventario en API). */
+type PosCatalogProduct = {
+  id: number
+  name: string
+  category: string
+  costPrice: number
+  salePrice: number
+  stock: number
+  image: string | null
+}
+
+function inventoryDtoToPosProduct(dto: InventoryProductDto): PosCatalogProduct {
+  return {
+    id: dto.id,
+    name: dto.name,
+    category: dto.categoryName,
+    costPrice: dto.costPrice,
+    salePrice: dto.salePrice,
+    stock: dto.quantity,
+    image: dto.imageUrl,
+  }
+}
+
 interface CartItem {
-  product: typeof mockProducts[0]
+  product: PosCatalogProduct
   quantity: number
 }
 
@@ -81,14 +103,17 @@ interface CustomCartLine {
   price: number
 }
 
-function deserializeSaleToCart(sale: SaleRecord): {
+function deserializeSaleToCart(
+  sale: SaleRecord,
+  catalog: PosCatalogProduct[],
+): {
   cart: CartItem[]
   customLines: CustomCartLine[]
 } {
   const customLines: CustomCartLine[] = []
   const byId = new Map<number, CartItem>()
   for (const line of sale.items) {
-    const p = mockProducts.find((x) => x.name.trim() === line.name.trim())
+    const p = catalog.find((x) => x.name.trim() === line.name.trim())
     if (p) {
       const ex = byId.get(p.id)
       if (ex) {
@@ -107,13 +132,6 @@ function deserializeSaleToCart(sale: SaleRecord): {
   return { cart: Array.from(byId.values()), customLines }
 }
 
-function customerSelectValueFromSaleName(name: string): string {
-  const t = name.trim()
-  if (!t || t === "Cliente General") return "general"
-  const c = mockCustomers.find((x) => x.name === t)
-  return c ? String(c.id) : "general"
-}
-
 function dateAtNoon(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)
 }
@@ -128,11 +146,50 @@ type HistoryRow =
 
 export function Ventas() {
   const { abonos } = useBusiness()
+  const [posProducts, setPosProducts] = useState<PosCatalogProduct[]>([])
+  const [posLoadState, setPosLoadState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  )
+  const [posLoadError, setPosLoadError] = useState<string | null>(null)
+
+  const loadPosCatalog = useCallback(async () => {
+    setPosLoadState("loading")
+    setPosLoadError(null)
+    try {
+      const rows = await fetchInventoryProducts(false)
+      setPosProducts(rows.map(inventoryDtoToPosProduct))
+      setPosLoadState("ready")
+    } catch (e) {
+      setPosLoadState("error")
+      setPosLoadError(e instanceof Error ? e.message : "No se pudo cargar el inventario.")
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadPosCatalog()
+  }, [loadPosCatalog])
+
+  /** Costos para márgenes: inventario real + nombres del catálogo demo (historial mock). */
+  const catalogForProfit = useMemo((): CatalogProduct[] => {
+    const seen = new Set<string>()
+    const out: CatalogProduct[] = []
+    for (const p of posProducts) {
+      const n = p.name.trim()
+      if (!n || seen.has(n)) continue
+      seen.add(n)
+      out.push({ name: p.name, costPrice: p.costPrice })
+    }
+    for (const p of mockProducts) {
+      const n = p.name.trim()
+      if (seen.has(n)) continue
+      seen.add(n)
+      out.push({ name: p.name, costPrice: p.costPrice })
+    }
+    return out
+  }, [posProducts])
+
   const [searchTerm, setSearchTerm] = useState("")
   const [cart, setCart] = useState<CartItem[]>([])
-  const [showCheckout, setShowCheckout] = useState(false)
-  const [selectedCustomer, setSelectedCustomer] = useState<string>("general")
-  const [paymentMethod, setPaymentMethod] = useState<string>("efectivo")
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
   const [salesHistory, setSalesHistory] = useState<SaleRecord[]>(() =>
     mockSalesHistoryExtended.map((s) => ({ ...s, timestamp: new Date(s.timestamp) }))
@@ -152,20 +209,23 @@ export function Ventas() {
   const [activeTab, setActiveTab] = useState("pos")
   const [historyProductSearch, setHistoryProductSearch] = useState("")
 
-  const filteredProducts = mockProducts.filter(
+  const filteredProducts = posProducts.filter(
     (product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchTerm.toLowerCase())
+      product.category.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  const addToCart = (product: typeof mockProducts[0]) => {
+  const addToCart = (product: PosCatalogProduct) => {
+    if (product.stock <= 0) return
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id)
       if (existing) {
+        const nextQty = existing.quantity + 1
+        if (nextQty > product.stock) return prev
         return prev.map((item) =>
           item.product.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+            ? { ...item, quantity: nextQty }
+            : item,
         )
       }
       return [...prev, { product, quantity: 1 }]
@@ -175,12 +235,13 @@ export function Ventas() {
   const updateQuantity = (productId: number, delta: number) => {
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.product.id === productId
-            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-            : item
-        )
-        .filter((item) => item.quantity > 0)
+        .map((item) => {
+          if (item.product.id !== productId) return item
+          const next = Math.max(0, item.quantity + delta)
+          const capped = Math.min(next, item.product.stock)
+          return { ...item, quantity: capped }
+        })
+        .filter((item) => item.quantity > 0),
     )
   }
 
@@ -247,13 +308,13 @@ export function Ventas() {
   )
 
   const periodProfitTotal = useMemo(
-    () => aggregateProfitForSales(visibleSalesPaid, mockProducts).totalMargin,
-    [visibleSalesPaid]
+    () => aggregateProfitForSales(visibleSalesPaid, catalogForProfit).totalMargin,
+    [visibleSalesPaid, catalogForProfit],
   )
 
   const balanceTotals = useMemo(
-    () => aggregateProfitForSales(visibleSalesPaid, mockProducts),
-    [visibleSalesPaid]
+    () => aggregateProfitForSales(visibleSalesPaid, catalogForProfit),
+    [visibleSalesPaid, catalogForProfit],
   )
 
   const historyPeriodCaption = formatSalesHistoryPeriodCaption(
@@ -261,91 +322,18 @@ export function Ventas() {
     historyRefDate
   )
 
-  const nextSaleId = () =>
-    salesHistory.length ? Math.max(...salesHistory.map((s) => s.id)) + 1 : 1
-
-  const buildCheckoutItems = () => [
-    ...cart.map((item) => ({
-      name: item.product.name,
-      quantity: item.quantity,
-      price: item.product.salePrice,
-    })),
-    ...customLines.map((l) => ({
-      name: l.name,
-      quantity: l.quantity,
-      price: l.price,
-    })),
-  ]
-
-  const handleCheckout = () => {
-    const items = buildCheckoutItems()
-    const computedTotal = items.reduce((a, row) => a + row.price * row.quantity, 0)
-    const customerName =
-      selectedCustomer && selectedCustomer !== "general"
-        ? mockCustomers.find((c) => c.id.toString() === selectedCustomer)?.name ??
-          "Cliente General"
-        : "Cliente General"
-
-    if (editingSale) {
-      const id = editingSale.id
-      setSalesHistory((prev) =>
-        prev.map((s) =>
-          s.id === id
-            ? {
-                ...s,
-                customer: customerName,
-                paymentMethod: paymentMethod as SaleRecord["paymentMethod"],
-                items,
-                total: computedTotal,
-              }
-            : s
-        )
-      )
-      setSelectedSale((cur) =>
-        cur?.id === id
-          ? {
-              ...cur,
-              customer: customerName,
-              paymentMethod: paymentMethod as SaleRecord["paymentMethod"],
-              items,
-              total: computedTotal,
-            }
-          : cur
-      )
-      setEditingSale(null)
-    } else {
-      const newSale: SaleRecord = {
-        id: nextSaleId(),
-        timestamp: new Date(),
-        customer: customerName,
-        items,
-        total: computedTotal,
-        paymentMethod: paymentMethod as "efectivo" | "tarjeta" | "fiado",
-        employeeId: 1,
-      }
-      setSalesHistory([newSale, ...salesHistory])
-    }
-
-    setCart([])
-    setCustomLines([])
-    setShowCheckout(false)
-    setSelectedCustomer("general")
-    setPaymentMethod("efectivo")
-    setMobileCartOpen(false)
-  }
-
   const startEditingSale = (sale: SaleRecord) => {
-    const { cart: nextCart, customLines: nextCustom } = deserializeSaleToCart(sale)
+    const { cart: nextCart, customLines: nextCustom } = deserializeSaleToCart(
+      sale,
+      posProducts,
+    )
     setEditingSale(sale)
     setCart(nextCart)
     setCustomLines(nextCustom)
-    setSelectedCustomer(customerSelectValueFromSaleName(sale.customer))
-    setPaymentMethod(sale.paymentMethod)
     setActiveTab("pos")
     setShowSaleDetail(false)
     setSelectedSale(null)
     setMobileCartOpen(false)
-    setShowCheckout(false)
     setSearchTerm("")
   }
 
@@ -353,9 +341,6 @@ export function Ventas() {
     setEditingSale(null)
     setCart([])
     setCustomLines([])
-    setSelectedCustomer("general")
-    setPaymentMethod("efectivo")
-    setShowCheckout(false)
   }
 
   const removeCustomLine = (index: number) => {
@@ -417,10 +402,18 @@ export function Ventas() {
                 key={item.product.id}
                 className="flex items-center gap-3 rounded-lg border bg-card p-3"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <span className="text-sm font-bold text-muted-foreground">
-                    {item.product.name.charAt(0)}
-                  </span>
+                <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+                  {item.product.image ? (
+                    <img
+                      src={item.product.image}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-sm font-bold text-muted-foreground">
+                      {item.product.name.charAt(0)}
+                    </span>
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{item.product.name}</p>
@@ -497,11 +490,14 @@ export function Ventas() {
         </div>
         <Button
           className="h-12 w-full text-base"
-          disabled={cart.length === 0 && customLines.length === 0}
-          onClick={() => setShowCheckout(true)}
+          disabled
+          title="El registro de ventas en el servidor aún no está habilitado."
         >
           {editingSale ? "Guardar cambios…" : "Cobrar"}
         </Button>
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          Cobro deshabilitado: solo se muestran productos del inventario real.
+        </p>
       </div>
     </>
   )
@@ -512,7 +508,9 @@ export function Ventas() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-xl font-bold text-foreground sm:text-2xl">Punto de Venta</h1>
-            <p className="text-sm text-muted-foreground sm:text-base">Realiza ventas y consulta el historial del dia</p>
+            <p className="text-sm text-muted-foreground sm:text-base">
+              Catálogo del POS cargado desde tu inventario. El cobro queda deshabilitado hasta conectar el registro de ventas.
+            </p>
           </div>
           <TabsList className="grid w-full grid-cols-2 sm:w-auto">
             <TabsTrigger value="pos" className="gap-2">
@@ -581,37 +579,86 @@ export function Ventas() {
 
               {/* Products */}
               <div className="min-h-0 flex-1 overflow-y-auto pb-4" style={{ maxHeight: "calc(100vh - 22rem)" }}>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
-                  {filteredProducts.map((product) => (
-                    <Card
-                      key={product.id}
-                      className="cursor-pointer shadow-sm transition-all hover:shadow-md active:scale-[0.98]"
-                      onClick={() => addToCart(product)}
+                {posLoadState === "loading" ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
+                    <Clock className="h-8 w-8 animate-pulse opacity-50" />
+                    Cargando productos del inventario…
+                  </div>
+                ) : posLoadState === "error" ? (
+                  <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+                    <p className="text-destructive">{posLoadError}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-3"
+                      onClick={() => void loadPosCatalog()}
                     >
-                      <CardContent className="p-3 sm:p-4">
-                        <div className="mb-2 flex h-12 items-center justify-center rounded-lg bg-muted sm:h-16">
-                          {product.image ? (
-                            <img src={product.image} alt={product.name} className="h-full w-full rounded-lg object-cover" />
-                          ) : (
-                            <span className="text-xl font-bold text-muted-foreground sm:text-2xl">
-                              {product.name.charAt(0)}
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="line-clamp-2 text-xs font-medium sm:text-sm">{product.name}</h3>
-                        <p className="text-xs text-muted-foreground">{product.category}</p>
-                        <div className="mt-2 flex items-center justify-between">
-                          <span className="text-base font-bold text-primary sm:text-lg">
-                            {formatQ(product.salePrice)}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {product.stock}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                      Reintentar
+                    </Button>
+                  </div>
+                ) : filteredProducts.length === 0 ? (
+                  <p className="py-12 text-center text-sm text-muted-foreground">
+                    No hay productos activos en inventario. Agrega productos en el módulo Inventario.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
+                    {filteredProducts.map((product) => {
+                      const outOfStock = product.stock <= 0
+                      return (
+                        <Card
+                          key={product.id}
+                          role="button"
+                          tabIndex={outOfStock ? -1 : 0}
+                          aria-disabled={outOfStock}
+                          className={`shadow-sm transition-all ${
+                            outOfStock
+                              ? "cursor-not-allowed opacity-50"
+                              : "cursor-pointer hover:shadow-md active:scale-[0.98]"
+                          }`}
+                          onClick={() => !outOfStock && addToCart(product)}
+                          onKeyDown={(e) => {
+                            if (outOfStock) return
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault()
+                              addToCart(product)
+                            }
+                          }}
+                        >
+                          <CardContent className="p-3 sm:p-4">
+                            <div className="mb-2 flex h-14 w-full items-center justify-center overflow-hidden rounded-lg bg-muted sm:h-28">
+                              {product.image ? (
+                                <img
+                                  src={product.image}
+                                  alt=""
+                                  className="max-h-full max-w-full object-contain"
+                                />
+                              ) : (
+                                <span className="text-xl font-bold text-muted-foreground sm:text-2xl">
+                                  {product.name.charAt(0)}
+                                </span>
+                              )}
+                            </div>
+                            <h3 className="line-clamp-2 text-xs font-medium sm:text-sm">{product.name}</h3>
+                            <p className="text-xs text-muted-foreground">{product.category}</p>
+                            <div className="mt-2 flex items-center justify-between gap-1">
+                              <span className="text-base font-bold text-primary sm:text-lg">
+                                {formatQ(product.salePrice)}
+                              </span>
+                              <span
+                                className={
+                                  outOfStock ? "text-xs font-medium text-destructive" : "text-xs text-muted-foreground"
+                                }
+                              >
+                                {outOfStock ? "Sin stock" : product.stock}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -712,7 +759,7 @@ export function Ventas() {
                       visibleSales,
                       historyViewPeriod,
                       historyRefDate,
-                      mockProducts
+                      catalogForProfit,
                     )
                   }}
                 >
@@ -1001,7 +1048,7 @@ export function Ventas() {
           </DialogHeader>
           {selectedSale &&
             (() => {
-              const pb = saleProfitBreakdown(selectedSale, mockProducts)
+              const pb = saleProfitBreakdown(selectedSale, catalogForProfit)
               const isFiado = selectedSale.paymentMethod === "fiado"
               const fechaStr = selectedSale.timestamp.toLocaleDateString("es-GT", {
                 weekday: "long",
@@ -1134,90 +1181,6 @@ export function Ventas() {
               ) : null}
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Checkout Dialog */}
-      <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editingSale ? `Guardar venta #${editingSale.id}` : "Finalizar Venta"}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              {editingSale ? "Cliente y método de pago" : "Cliente y método de pago"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Customer Selection */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Cliente (opcional)</label>
-              <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
-                <SelectTrigger className="h-11 sm:h-12">
-                  <SelectValue placeholder="Seleccionar cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="general">Cliente General</SelectItem>
-                  {mockCustomers.map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id.toString()}>
-                      {customer.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Payment Method */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Metodo de Pago</label>
-              <div className="grid grid-cols-3 gap-2">
-                <Button
-                  variant={paymentMethod === "efectivo" ? "default" : "outline"}
-                  className="h-14 flex-col gap-1 sm:h-12"
-                  onClick={() => setPaymentMethod("efectivo")}
-                >
-                  <Banknote className="h-4 w-4" />
-                  <span className="text-xs">Efectivo</span>
-                </Button>
-                <Button
-                  variant={paymentMethod === "tarjeta" ? "default" : "outline"}
-                  className="h-14 flex-col gap-1 sm:h-12"
-                  onClick={() => setPaymentMethod("tarjeta")}
-                >
-                  <CreditCard className="h-4 w-4" />
-                  <span className="text-xs">Tarjeta</span>
-                </Button>
-                <Button
-                  variant={paymentMethod === "fiado" ? "default" : "outline"}
-                  className="h-14 flex-col gap-1 sm:h-12"
-                  onClick={() => setPaymentMethod("fiado")}
-                >
-                  <User className="h-4 w-4" />
-                  <span className="text-xs">Fiado</span>
-                </Button>
-              </div>
-            </div>
-
-            {/* Total */}
-            <div className="rounded-lg bg-muted p-4">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">
-                  {editingSale ? "Total de la venta" : "Total a Cobrar"}
-                </span>
-                <span className="text-2xl font-bold text-primary">
-                  {formatQ(total)}
-                </span>
-              </div>
-            </div>
-
-            <Button
-              className="h-12 w-full text-base"
-              disabled={cart.length === 0 && customLines.length === 0}
-              onClick={handleCheckout}
-            >
-              {editingSale ? "Guardar cambios" : "Confirmar Venta"}
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
 
