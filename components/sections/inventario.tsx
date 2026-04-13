@@ -117,16 +117,24 @@ export function Inventario() {
   }, [imagePreview])
 
   const loadInventory = useCallback(async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      const [cats, prods] = await Promise.all([
-        fetchInventoryCategories(),
-        fetchInventoryProducts(false),
-      ])
+      const cats = await fetchInventoryCategories()
       setProductCategories(cats)
+    } catch (e) {
+      setProductCategories([])
+      toast.error(
+        e instanceof Error ? e.message : "No se pudieron cargar las categorías de producto.",
+      )
+    }
+    try {
+      const prods = await fetchInventoryProducts(false)
       setProducts(prods.map(mapProductDtoToRow).filter((p) => p.status === 1))
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo cargar el inventario.")
+      setProducts([])
+      toast.error(
+        e instanceof Error ? e.message : "No se pudieron cargar los productos.",
+      )
     } finally {
       setLoading(false)
     }

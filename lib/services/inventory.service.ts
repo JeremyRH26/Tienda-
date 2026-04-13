@@ -39,13 +39,19 @@ export async function fetchInventoryCategories(): Promise<InventoryCategoryDto[]
   if (!Array.isArray(data)) {
     return []
   }
-  return data.map((row) => {
-    const r = row as Record<string, unknown>
-    return {
-      id: Number(r.id),
-      name: String(r.name ?? ""),
-    }
-  })
+  return data
+    .map((row) => {
+      const r = row as Record<string, unknown>
+      const rawId = r.id ?? r.ID
+      const rawName = r.name ?? r.NAME
+      const id = Number(rawId)
+      const name = rawName != null ? String(rawName) : ""
+      if (!Number.isFinite(id) || id <= 0 || !name.trim()) {
+        return null
+      }
+      return { id, name: name.trim() }
+    })
+    .filter((x): x is InventoryCategoryDto => x != null)
 }
 
 export async function createInventoryCategory(
