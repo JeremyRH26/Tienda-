@@ -5,6 +5,15 @@ export type InventoryCategoryDto = {
   name: string
 }
 
+/** Fila de `supplier` expuesta por GET /inventory/suppliers (solo lectura). */
+export type InventorySupplierDto = {
+  id: number
+  companyName: string
+  contactName: string
+  phone: string | null
+  email: string | null
+}
+
 export type InventoryProductDto = {
   id: number
   categoryId: number
@@ -107,6 +116,30 @@ export async function createInventoryCategory(
     throw new Error("Respuesta inválida del servidor.")
   }
   return { id: Number(d.id), name: String(d.name ?? name.trim()) }
+}
+
+export async function fetchInventorySuppliers(): Promise<InventorySupplierDto[]> {
+  const res = await fetch(`${API_BASE}/inventory/suppliers`)
+  const json = await readJson(res)
+  if (!res.ok) {
+    throw new Error(
+      typeof json.message === "string" ? json.message : "No se pudieron cargar los proveedores.",
+    )
+  }
+  const data = json.data
+  if (!Array.isArray(data)) {
+    return []
+  }
+  return data.map((row) => {
+    const r = row as Record<string, unknown>
+    return {
+      id: Number(r.id),
+      companyName: String(r.companyName ?? r.company_name ?? ""),
+      contactName: String(r.contactName ?? r.contact_name ?? ""),
+      phone: r.phone != null ? String(r.phone) : null,
+      email: r.email != null ? String(r.email) : null,
+    }
+  })
 }
 
 export async function fetchInventoryProducts(
@@ -284,7 +317,12 @@ export async function setInventoryMinStock(
   }
 }
 
-export function mapProductDtoToRow(dto: InventoryProductDto): {
+export type SupplierLabelRow = { id: number; companyName: string }
+
+export function mapProductDtoToRow(
+  dto: InventoryProductDto,
+  suppliersForLabel: SupplierLabelRow[] = [],
+): {
   id: number
   name: string
   category: string
@@ -293,10 +331,18 @@ export function mapProductDtoToRow(dto: InventoryProductDto): {
   salePrice: number
   stock: number
   minStock: number
+  supplierId: number | null
   supplier: string
   image: string | null
   status: number
 } {
+  const sid = dto.supplierId != null ? Number(dto.supplierId) : null
+  let supplierLabel = "—"
+  if (sid != null) {
+    const s = suppliersForLabel.find((x) => x.id === sid)
+    supplierLabel =
+      s?.companyName?.trim() ? s.companyName : `Proveedor #${sid}`
+  }
   return {
     id: dto.id,
     name: dto.name,
@@ -306,8 +352,8 @@ export function mapProductDtoToRow(dto: InventoryProductDto): {
     salePrice: dto.salePrice,
     stock: dto.quantity,
     minStock: dto.minStock,
-    supplier:
-      dto.supplierId != null ? `Proveedor #${dto.supplierId}` : "-",
+    supplierId: sid,
+    supplier: supplierLabel,
     image: dto.imageUrl,
     status: dto.status,
   }

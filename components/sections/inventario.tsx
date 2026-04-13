@@ -28,12 +28,14 @@ import {
   deleteInventoryProduct,
   fetchInventoryCategories,
   fetchInventoryProducts,
+  fetchInventorySuppliers,
   mapProductDtoToRow,
   setInventoryMinStock,
   updateInventoryCategory,
   updateInventoryProduct,
   uploadInventoryProductImage,
   type InventoryCategoryDto,
+  type InventorySupplierDto,
 } from "@/lib/services/inventory.service"
 import { CategoryAdminDialog } from "@/components/category-admin-dialog"
 import { downloadInventoryPdf } from "@/lib/pdf-reports"
@@ -64,6 +66,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+const SUPPLIER_NONE = "__none__"
+
+function parseSupplierFormValue(v: string): number | null {
+  if (!v || v === SUPPLIER_NONE) return null
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 type ProductRow = {
   id: number
   name: string
@@ -73,6 +83,7 @@ type ProductRow = {
   salePrice: number
   stock: number
   minStock: number
+  supplierId: number | null
   supplier: string
   image: string | null
   status: number
@@ -80,6 +91,7 @@ type ProductRow = {
 
 export function Inventario() {
   const [products, setProducts] = useState<ProductRow[]>([])
+  const [suppliers, setSuppliers] = useState<InventorySupplierDto[]>([])
   const [productCategories, setProductCategories] = useState<InventoryCategoryDto[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -98,7 +110,7 @@ export function Inventario() {
     salePrice: "",
     stock: "",
     minStock: "",
-    supplier: "",
+    supplierId: SUPPLIER_NONE,
   })
   const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null)
   const [editProductForm, setEditProductForm] = useState({
@@ -108,7 +120,7 @@ export function Inventario() {
     salePrice: "",
     stock: "",
     minStock: "",
-    supplier: "",
+    supplierId: SUPPLIER_NONE,
   })
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null)
   const [showCategoryAdminDialog, setShowCategoryAdminDialog] = useState(false)
@@ -132,9 +144,18 @@ export function Inventario() {
         e instanceof Error ? e.message : "No se pudieron cargar las categorías de producto.",
       )
     }
+    let supList: InventorySupplierDto[] = []
+    try {
+      supList = await fetchInventorySuppliers()
+      setSuppliers(supList)
+    } catch {
+      setSuppliers([])
+    }
     try {
       const prods = await fetchInventoryProducts(false)
-      setProducts(prods.map(mapProductDtoToRow).filter((p) => p.status === 1))
+      setProducts(
+        prods.map((p) => mapProductDtoToRow(p, supList)).filter((x) => x.status === 1),
+      )
     } catch (e) {
       setProducts([])
       toast.error(
@@ -153,10 +174,14 @@ export function Inventario() {
     if (!showAddProduct) return
     void (async () => {
       try {
-        const cats = await fetchInventoryCategories()
+        const [cats, sups] = await Promise.all([
+          fetchInventoryCategories(),
+          fetchInventorySuppliers().catch(() => [] as InventorySupplierDto[]),
+        ])
         setProductCategories(cats)
+        setSuppliers(sups)
       } catch {
-        /* se mantiene el listado previo; errores ya se mostraron al cargar la página */
+        /* se mantiene el listado previo */
       }
     })()
   }, [showAddProduct])
@@ -196,6 +221,7 @@ export function Inventario() {
     const sale = parseFloat(newProduct.salePrice) || 0
     const stock = parseInt(newProduct.stock, 10) || 0
     const minStock = parseInt(newProduct.minStock, 10) || 0
+    const supplierId = parseSupplierFormValue(newProduct.supplierId)
     try {
       setSaving(true)
       const { productId } = await createInventoryProduct({
@@ -205,7 +231,7 @@ export function Inventario() {
         salePrice: sale,
         initialQuantity: stock,
         minStock,
-        supplierId: null,
+        supplierId,
         status: 1,
       })
       if (imageFile) {
@@ -230,7 +256,7 @@ export function Inventario() {
         salePrice: "",
         stock: "",
         minStock: "",
-        supplier: "",
+        supplierId: SUPPLIER_NONE,
       })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo crear el producto.")
@@ -248,7 +274,8 @@ export function Inventario() {
       salePrice: String(p.salePrice),
       stock: String(p.stock),
       minStock: String(p.minStock),
-      supplier: p.supplier,
+      supplierId:
+        p.supplierId != null ? String(p.supplierId) : SUPPLIER_NONE,
     })
   }
 
@@ -266,6 +293,7 @@ export function Inventario() {
     const minStock = parseInt(editProductForm.minStock, 10) || 0
     const oldStock = editingProduct.stock
     const oldMin = editingProduct.minStock
+    const supplierId = parseSupplierFormValue(editProductForm.supplierId)
     try {
       setSaving(true)
       await updateInventoryProduct(id, {
@@ -274,7 +302,7 @@ export function Inventario() {
         costPrice: cost,
         salePrice: sale,
         imageUrl: editingProduct.image,
-        supplierId: null,
+        supplierId,
         status: editingProduct.status,
       })
       if (minStock !== oldMin) {
@@ -484,14 +512,28 @@ export function Inventario() {
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Proveedor</label>
-                  <Input
-                    value={newProduct.supplier}
-                    onChange={(e) =>
-                      setNewProduct({ ...newProduct, supplier: e.target.value })
+                  <Select
+                    value={
+                      newProduct.supplierId && newProduct.supplierId !== SUPPLIER_NONE
+                        ? newProduct.supplierId
+                        : SUPPLIER_NONE
                     }
-                    className="h-11 sm:h-12"
-                    placeholder="Nombre del proveedor"
-                  />
+                    onValueChange={(value) =>
+                      setNewProduct({ ...newProduct, supplierId: value })
+                    }
+                  >
+                    <SelectTrigger className="h-11 sm:h-12">
+                      <SelectValue placeholder="Seleccionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SUPPLIER_NONE}>Sin proveedor</SelectItem>
+                      {suppliers.map((s) => (
+                        <SelectItem key={s.id} value={String(s.id)}>
+                          {s.companyName.trim() || `Proveedor #${s.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -828,13 +870,29 @@ export function Inventario() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Proveedor</label>
-              <Input
-                value={editProductForm.supplier}
-                onChange={(e) =>
-                  setEditProductForm({ ...editProductForm, supplier: e.target.value })
+              <Select
+                value={
+                  editProductForm.supplierId &&
+                  editProductForm.supplierId !== SUPPLIER_NONE
+                    ? editProductForm.supplierId
+                    : SUPPLIER_NONE
                 }
-                className="h-11"
-              />
+                onValueChange={(value) =>
+                  setEditProductForm({ ...editProductForm, supplierId: value })
+                }
+              >
+                <SelectTrigger className="h-11">
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SUPPLIER_NONE}>Sin proveedor</SelectItem>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={String(s.id)}>
+                      {s.companyName.trim() || `Proveedor #${s.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
