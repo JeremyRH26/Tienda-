@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,8 +18,20 @@ import {
   Trash2,
   FileDown,
 } from "lucide-react"
-import { mockProducts, categories } from "@/lib/mock-data"
 import { formatQ } from "@/lib/currency"
+import {
+  adjustInventoryStock,
+  createInventoryCategory,
+  createInventoryProduct,
+  deleteInventoryProduct,
+  fetchInventoryCategories,
+  fetchInventoryProducts,
+  mapProductDtoToRow,
+  setInventoryMinStock,
+  updateInventoryProduct,
+  uploadInventoryProductImage,
+  type InventoryCategoryDto,
+} from "@/lib/services/inventory.service"
 import { downloadInventoryPdf } from "@/lib/pdf-reports"
 import {
   Dialog,
@@ -47,23 +60,36 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-type ProductRow = (typeof mockProducts)[0]
+type ProductRow = {
+  id: number
+  name: string
+  category: string
+  categoryId: number
+  costPrice: number
+  salePrice: number
+  stock: number
+  minStock: number
+  supplier: string
+  image: string | null
+  status: number
+}
 
 export function Inventario() {
-  const [products, setProducts] = useState<ProductRow[]>(() =>
-    mockProducts.map((p) => ({ ...p }))
-  )
-  const [productCategories, setProductCategories] = useState<string[]>(() => [...categories])
+  const [products, setProducts] = useState<ProductRow[]>([])
+  const [productCategories, setProductCategories] = useState<InventoryCategoryDto[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [categoryDialogFor, setCategoryDialogFor] = useState<"add" | "edit" | null>(null)
   const [newCategoryName, setNewCategoryName] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [showAddProduct, setShowAddProduct] = useState(false)
-  const [productImage, setProductImage] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [newProduct, setNewProduct] = useState({
     name: "",
-    category: "",
+    categoryId: "",
     costPrice: "",
     salePrice: "",
     stock: "",
@@ -73,7 +99,7 @@ export function Inventario() {
   const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null)
   const [editProductForm, setEditProductForm] = useState({
     name: "",
-    category: "",
+    categoryId: "",
     costPrice: "",
     salePrice: "",
     stock: "",
@@ -82,12 +108,40 @@ export function Inventario() {
   })
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null)
 
+  const clearAddImage = useCallback(() => {
+    if (imagePreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview)
+    }
+    setImagePreview(null)
+    setImageFile(null)
+  }, [imagePreview])
+
+  const loadInventory = useCallback(async () => {
+    try {
+      setLoading(true)
+      const [cats, prods] = await Promise.all([
+        fetchInventoryCategories(),
+        fetchInventoryProducts(false),
+      ])
+      setProductCategories(cats)
+      setProducts(prods.map(mapProductDtoToRow).filter((p) => p.status === 1))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo cargar el inventario.")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadInventory()
+  }, [loadInventory])
+
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.supplier.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory =
-      categoryFilter === "all" || product.category === categoryFilter
+      categoryFilter === "all" || String(product.categoryId) === categoryFilter
     return matchesSearch && matchesCategory
   })
 
@@ -99,53 +153,72 @@ export function Inventario() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setProductImage(reader.result as string)
+      if (imagePreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview)
       }
-      reader.readAsDataURL(file)
+      setImageFile(file)
+      setImagePreview(URL.createObjectURL(file))
     }
   }
 
-  const handleAddProduct = () => {
-    if (!newProduct.name.trim() || !newProduct.category) return
+  const handleAddProduct = async () => {
+    const categoryId = Number(newProduct.categoryId)
+    if (!newProduct.name.trim() || !Number.isFinite(categoryId) || categoryId <= 0) {
+      toast.error("Indica nombre y categoría del producto.")
+      return
+    }
     const cost = parseFloat(newProduct.costPrice) || 0
     const sale = parseFloat(newProduct.salePrice) || 0
     const stock = parseInt(newProduct.stock, 10) || 0
     const minStock = parseInt(newProduct.minStock, 10) || 0
-    const nextId = products.length ? Math.max(...products.map((p) => p.id)) + 1 : 1
-    setProducts((prev) => [
-      ...prev,
-      {
-        id: nextId,
+    try {
+      setSaving(true)
+      const { productId } = await createInventoryProduct({
+        categoryId,
         name: newProduct.name.trim(),
-        category: newProduct.category,
         costPrice: cost,
         salePrice: sale,
-        stock,
+        initialQuantity: stock,
         minStock,
-        supplier: newProduct.supplier.trim() || "-",
-        image: productImage || `https://picsum.photos/seed/nuevo${nextId}/480/360`,
-      },
-    ])
-    setShowAddProduct(false)
-    setProductImage(null)
-    setNewProduct({
-      name: "",
-      category: "",
-      costPrice: "",
-      salePrice: "",
-      stock: "",
-      minStock: "",
-      supplier: "",
-    })
+        supplierId: null,
+        status: 1,
+      })
+      if (imageFile) {
+        try {
+          await uploadInventoryProductImage(productId, imageFile)
+        } catch (imgErr) {
+          toast.warning(
+            imgErr instanceof Error
+              ? `Producto creado, pero la imagen falló: ${imgErr.message}`
+              : "Producto creado, pero no se subió la imagen.",
+          )
+        }
+      }
+      await loadInventory()
+      toast.success("Producto creado correctamente.")
+      setShowAddProduct(false)
+      clearAddImage()
+      setNewProduct({
+        name: "",
+        categoryId: "",
+        costPrice: "",
+        salePrice: "",
+        stock: "",
+        minStock: "",
+        supplier: "",
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo crear el producto.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const openProductEdit = (p: ProductRow) => {
     setEditingProduct(p)
     setEditProductForm({
       name: p.name,
-      category: p.category,
+      categoryId: String(p.categoryId),
       costPrice: String(p.costPrice),
       salePrice: String(p.salePrice),
       stock: String(p.stock),
@@ -154,30 +227,46 @@ export function Inventario() {
     })
   }
 
-  const saveProductEdit = () => {
+  const saveProductEdit = async () => {
     if (!editingProduct) return
     const id = editingProduct.id
+    const categoryId = Number(editProductForm.categoryId)
+    if (!Number.isFinite(categoryId) || categoryId <= 0) {
+      toast.error("Selecciona una categoría válida.")
+      return
+    }
     const cost = parseFloat(editProductForm.costPrice) || 0
     const sale = parseFloat(editProductForm.salePrice) || 0
     const stock = parseInt(editProductForm.stock, 10) || 0
     const minStock = parseInt(editProductForm.minStock, 10) || 0
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              name: editProductForm.name.trim() || p.name,
-              category: editProductForm.category || p.category,
-              costPrice: cost,
-              salePrice: sale,
-              stock,
-              minStock,
-              supplier: editProductForm.supplier.trim() || p.supplier,
-            }
-          : p
-      )
-    )
-    setEditingProduct(null)
+    const oldStock = editingProduct.stock
+    const oldMin = editingProduct.minStock
+    try {
+      setSaving(true)
+      await updateInventoryProduct(id, {
+        categoryId,
+        name: editProductForm.name.trim() || editingProduct.name,
+        costPrice: cost,
+        salePrice: sale,
+        imageUrl: editingProduct.image,
+        supplierId: null,
+        status: editingProduct.status,
+      })
+      if (minStock !== oldMin) {
+        await setInventoryMinStock(id, minStock)
+      }
+      const delta = stock - oldStock
+      if (delta !== 0) {
+        await adjustInventoryStock(id, delta)
+      }
+      await loadInventory()
+      toast.success("Producto actualizado.")
+      setEditingProduct(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar el producto.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const calculateMargin = (cost: string, sale: string) => {
@@ -187,21 +276,39 @@ export function Inventario() {
     return ((saleNum - costNum) / saleNum * 100).toFixed(1)
   }
 
-  const saveNewProductCategory = () => {
+  const saveNewProductCategory = async () => {
     const name = newCategoryName.trim()
     if (!name) return
-    const existing = productCategories.find((c) => c.toLowerCase() === name.toLowerCase())
-    const canonical = existing ?? name
-    if (!existing) {
-      setProductCategories((prev) => [...prev, name])
+    const existing = productCategories.find((c) => c.name.toLowerCase() === name.toLowerCase())
+    if (existing) {
+      if (categoryDialogFor === "add") {
+        setNewProduct((p) => ({ ...p, categoryId: String(existing.id) }))
+      } else if (categoryDialogFor === "edit") {
+        setEditProductForm((f) => ({ ...f, categoryId: String(existing.id) }))
+      }
+      setCategoryDialogFor(null)
+      setNewCategoryName("")
+      toast.info("Esa categoría ya existe; se seleccionó en el formulario.")
+      return
     }
-    if (categoryDialogFor === "add") {
-      setNewProduct((p) => ({ ...p, category: canonical }))
-    } else if (categoryDialogFor === "edit") {
-      setEditProductForm((f) => ({ ...f, category: canonical }))
+    try {
+      setSaving(true)
+      const created = await createInventoryCategory(name)
+      const cats = await fetchInventoryCategories()
+      setProductCategories(cats)
+      if (categoryDialogFor === "add") {
+        setNewProduct((p) => ({ ...p, categoryId: String(created.id) }))
+      } else if (categoryDialogFor === "edit") {
+        setEditProductForm((f) => ({ ...f, categoryId: String(created.id) }))
+      }
+      toast.success("Categoría creada.")
+      setCategoryDialogFor(null)
+      setNewCategoryName("")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo crear la categoría.")
+    } finally {
+      setSaving(false)
     }
-    setCategoryDialogFor(null)
-    setNewCategoryName("")
   }
 
   return (
@@ -210,7 +317,10 @@ export function Inventario() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Inventario</h1>
-          <p className="text-sm text-muted-foreground sm:text-base">Gestiona tu stock y productos</p>
+          <p className="text-sm text-muted-foreground sm:text-base">
+            Gestiona tu stock y productos
+            {loading ? " · Cargando…" : ""}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -223,7 +333,13 @@ export function Inventario() {
             <span className="hidden sm:inline">Generar PDF inventario</span>
             <span className="sm:hidden">PDF</span>
           </Button>
-        <Dialog open={showAddProduct} onOpenChange={setShowAddProduct}>
+        <Dialog
+          open={showAddProduct}
+          onOpenChange={(open) => {
+            setShowAddProduct(open)
+            if (!open) clearAddImage()
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="h-11 gap-2 sm:h-12 sm:px-6">
               <Plus className="h-4 w-4" />
@@ -244,15 +360,15 @@ export function Inventario() {
                     className="relative flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50 transition-colors hover:border-primary/50 hover:bg-muted"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    {productImage ? (
+                    {imagePreview ? (
                       <>
-                        <img src={productImage} alt="Preview" className="h-full w-full object-cover" />
+                        <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
                         <button
                           type="button"
                           className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
                           onClick={(e) => {
                             e.stopPropagation()
-                            setProductImage(null)
+                            clearAddImage()
                           }}
                         >
                           <X className="h-3 w-3" />
@@ -294,9 +410,9 @@ export function Inventario() {
                   <label className="text-sm font-medium">Categoría</label>
                   <div className="flex gap-2">
                     <Select
-                      value={newProduct.category}
+                      value={newProduct.categoryId || undefined}
                       onValueChange={(value) =>
-                        setNewProduct({ ...newProduct, category: value })
+                        setNewProduct({ ...newProduct, categoryId: value })
                       }
                     >
                       <SelectTrigger className="h-11 flex-1 sm:h-12">
@@ -304,8 +420,8 @@ export function Inventario() {
                       </SelectTrigger>
                       <SelectContent>
                         {productCategories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {cat}
+                          <SelectItem key={cat.id} value={String(cat.id)}>
+                            {cat.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -411,8 +527,12 @@ export function Inventario() {
                   />
                 </div>
               </div>
-              <Button className="mt-2 h-11 w-full sm:h-12" onClick={handleAddProduct}>
-                Agregar Producto
+              <Button
+                className="mt-2 h-11 w-full sm:h-12"
+                onClick={() => void handleAddProduct()}
+                disabled={saving || loading}
+              >
+                {saving ? "Guardando…" : "Agregar Producto"}
               </Button>
             </div>
           </DialogContent>
@@ -488,8 +608,8 @@ export function Inventario() {
             <SelectContent>
               <SelectItem value="all">Todas las categorías</SelectItem>
               {productCategories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
+                <SelectItem key={cat.id} value={String(cat.id)}>
+                  {cat.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -504,6 +624,12 @@ export function Inventario() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-4 sm:p-6">
+          {!loading && filteredProducts.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No hay productos que coincidan. Crea una categoría (botón + junto al selector) y luego
+              &quot;Nuevo producto&quot; para registrar en el servidor.
+            </p>
+          ) : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredProducts.map((product) => {
               const margin = (
@@ -623,16 +749,18 @@ export function Inventario() {
               <label className="text-sm font-medium">Categoría</label>
               <div className="flex gap-2">
                 <Select
-                  value={editProductForm.category}
-                  onValueChange={(v) => setEditProductForm({ ...editProductForm, category: v })}
+                  value={editProductForm.categoryId || undefined}
+                  onValueChange={(v) =>
+                    setEditProductForm({ ...editProductForm, categoryId: v })
+                  }
                 >
                   <SelectTrigger className="h-11 flex-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {productCategories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
+                      <SelectItem key={cat.id} value={String(cat.id)}>
+                        {cat.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -710,8 +838,12 @@ export function Inventario() {
                 />
               </div>
             </div>
-            <Button className="h-11 w-full" onClick={saveProductEdit}>
-              Guardar
+            <Button
+              className="h-11 w-full"
+              onClick={() => void saveProductEdit()}
+              disabled={saving}
+            >
+              {saving ? "Guardando…" : "Guardar"}
             </Button>
           </div>
         </DialogContent>
@@ -747,8 +879,13 @@ export function Inventario() {
                 }}
               />
             </div>
-            <Button type="button" className="h-11 w-full" onClick={saveNewProductCategory}>
-              Agregar categoría
+            <Button
+              type="button"
+              className="h-11 w-full"
+              onClick={() => void saveNewProductCategory()}
+              disabled={saving}
+            >
+              {saving ? "Guardando…" : "Agregar categoría"}
             </Button>
           </div>
         </DialogContent>
@@ -767,11 +904,23 @@ export function Inventario() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (deletingProduct) {
-                  const id = deletingProduct.id
-                  setProducts((prev) => prev.filter((p) => p.id !== id))
-                }
+                const p = deletingProduct
                 setDeletingProduct(null)
+                if (!p) return
+                void (async () => {
+                  try {
+                    setSaving(true)
+                    await deleteInventoryProduct(p.id)
+                    await loadInventory()
+                    toast.success("Producto dado de baja.")
+                  } catch (e) {
+                    toast.error(
+                      e instanceof Error ? e.message : "No se pudo eliminar el producto.",
+                    )
+                  } finally {
+                    setSaving(false)
+                  }
+                })()
               }}
             >
               Eliminar
