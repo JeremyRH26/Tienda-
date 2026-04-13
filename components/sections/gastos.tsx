@@ -485,23 +485,23 @@ export function Gastos() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Método de pago</label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Button
                   type="button"
                   variant={formPayment === "efectivo" ? "default" : "outline"}
-                  className="h-12 gap-2"
+                  className="h-12 w-full gap-2"
                   onClick={() => setFormPayment("efectivo")}
                 >
-                  <Banknote className="h-4 w-4" />
+                  <Banknote className="h-4 w-4 shrink-0" />
                   Efectivo
                 </Button>
                 <Button
                   type="button"
                   variant={formPayment === "transferencia" ? "default" : "outline"}
-                  className="h-12 gap-2"
+                  className="h-auto min-h-12 w-full gap-2 whitespace-normal px-3 py-2.5 text-center text-sm leading-tight sm:h-12 sm:whitespace-nowrap sm:py-0"
                   onClick={() => setFormPayment("transferencia")}
                 >
-                  <Landmark className="h-4 w-4" />
+                  <Landmark className="h-4 w-4 shrink-0" />
                   Transferencia bancaria
                 </Button>
               </div>
@@ -756,23 +756,23 @@ export function Gastos() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Método de pago</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Button
                     type="button"
                     variant={editPayment === "efectivo" ? "default" : "outline"}
-                    className="h-12 gap-2"
+                    className="h-12 w-full gap-2"
                     onClick={() => setEditPayment("efectivo")}
                   >
-                    <Banknote className="h-4 w-4" />
+                    <Banknote className="h-4 w-4 shrink-0" />
                     Efectivo
                   </Button>
                   <Button
                     type="button"
                     variant={editPayment === "transferencia" ? "default" : "outline"}
-                    className="h-12 gap-2"
+                    className="h-12 w-full gap-2 whitespace-normal text-center text-sm leading-tight sm:whitespace-nowrap"
                     onClick={() => setEditPayment("transferencia")}
                   >
-                    <Landmark className="h-4 w-4" />
+                    <Landmark className="h-4 w-4 shrink-0" />
                     Transferencia
                   </Button>
                 </div>

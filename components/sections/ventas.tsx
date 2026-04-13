@@ -537,9 +537,9 @@ export function Ventas() {
           ) : null}
           <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
             {/* Products Grid */}
-            <div className="flex min-h-0 flex-1 flex-col space-y-4 overflow-hidden">
-              <div className="flex items-start justify-between gap-4">
-                <div className="relative flex-1">
+            <div className="flex min-h-0 flex-1 flex-col space-y-4">
+              <div className="flex items-start justify-between gap-3 sm:gap-4">
+                <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Buscar producto o categoría..."
@@ -548,15 +548,22 @@ export function Ventas() {
                     className="h-11 pl-10 text-base sm:h-12"
                   />
                 </div>
-                {/* Mobile Cart Button */}
+                {/* Mobile Cart Button — badge dentro del botón para que no lo recorte overflow del layout */}
                 <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
                   <SheetTrigger asChild>
-                    <Button variant="outline" size="icon" className="relative h-11 w-11 shrink-0 sm:h-12 sm:w-12 lg:hidden">
-                      <ShoppingCart className="h-5 w-5" />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="relative h-11 w-11 shrink-0 overflow-visible sm:h-12 sm:w-12 lg:hidden"
+                    >
+                      <ShoppingCart className="h-5 w-5 shrink-0" />
                       {cartItemCount > 0 && (
-                        <Badge className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center p-0 text-xs">
-                          {cartItemCount}
-                        </Badge>
+                        <span
+                          className="absolute right-0.5 top-0.5 z-10 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-bold tabular-nums leading-none text-primary-foreground shadow-sm ring-2 ring-background"
+                          aria-hidden
+                        >
+                          {cartItemCount > 99 ? "99+" : cartItemCount}
+                        </span>
                       )}
                     </Button>
                   </SheetTrigger>
