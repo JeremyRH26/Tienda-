@@ -17,21 +17,25 @@ import {
   Pencil,
   Trash2,
   FileDown,
+  Tags,
 } from "lucide-react"
 import { formatQ } from "@/lib/currency"
 import {
   adjustInventoryStock,
   createInventoryCategory,
   createInventoryProduct,
+  deleteInventoryCategory,
   deleteInventoryProduct,
   fetchInventoryCategories,
   fetchInventoryProducts,
   mapProductDtoToRow,
   setInventoryMinStock,
+  updateInventoryCategory,
   updateInventoryProduct,
   uploadInventoryProductImage,
   type InventoryCategoryDto,
 } from "@/lib/services/inventory.service"
+import { CategoryAdminDialog } from "@/components/category-admin-dialog"
 import { downloadInventoryPdf } from "@/lib/pdf-reports"
 import {
   Dialog,
@@ -107,6 +111,7 @@ export function Inventario() {
     supplier: "",
   })
   const [deletingProduct, setDeletingProduct] = useState<ProductRow | null>(null)
+  const [showCategoryAdminDialog, setShowCategoryAdminDialog] = useState(false)
 
   const clearAddImage = useCallback(() => {
     if (imagePreview?.startsWith("blob:")) {
@@ -143,6 +148,18 @@ export function Inventario() {
   useEffect(() => {
     void loadInventory()
   }, [loadInventory])
+
+  useEffect(() => {
+    if (!showAddProduct) return
+    void (async () => {
+      try {
+        const cats = await fetchInventoryCategories()
+        setProductCategories(cats)
+      } catch {
+        /* se mantiene el listado previo; errores ya se mostraron al cargar la página */
+      }
+    })()
+  }, [showAddProduct])
 
   const filteredProducts = products.filter((product) => {
     const matchesSearch =
@@ -335,6 +352,16 @@ export function Inventario() {
             type="button"
             variant="outline"
             className="h-11 gap-2 sm:h-12 sm:px-6"
+            onClick={() => setShowCategoryAdminDialog(true)}
+          >
+            <Tags className="h-4 w-4" />
+            <span className="hidden sm:inline">Categorías</span>
+            <span className="sm:hidden">Cat.</span>
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 gap-2 sm:h-12 sm:px-6"
             onClick={() => void downloadInventoryPdf(products)}
           >
             <FileDown className="h-4 w-4" />
@@ -423,8 +450,8 @@ export function Inventario() {
                         setNewProduct({ ...newProduct, categoryId: value })
                       }
                     >
-                      <SelectTrigger className="h-11 flex-1 sm:h-12">
-                        <SelectValue placeholder="Seleccionar" />
+                      <SelectTrigger className="h-11 min-w-0 flex-1 sm:h-12">
+                        <SelectValue placeholder="Seleccionar categoría" />
                       </SelectTrigger>
                       <SelectContent>
                         {productCategories.map((cat) => (
@@ -448,6 +475,12 @@ export function Inventario() {
                       <Plus className="h-4 w-4" />
                     </Button>
                   </div>
+                  {productCategories.length === 0 ? (
+                    <p className="text-muted-foreground text-xs">
+                      No hay categorías: pulsa + para crear una, o revisa que el API responda en{" "}
+                      <code className="rounded bg-muted px-1">/inventory/categories</code>.
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Proveedor</label>
@@ -762,8 +795,8 @@ export function Inventario() {
                     setEditProductForm({ ...editProductForm, categoryId: v })
                   }
                 >
-                  <SelectTrigger className="h-11 flex-1">
-                    <SelectValue />
+                  <SelectTrigger className="h-11 min-w-0 flex-1">
+                    <SelectValue placeholder="Categoría" />
                   </SelectTrigger>
                   <SelectContent>
                     {productCategories.map((cat) => (
@@ -787,6 +820,11 @@ export function Inventario() {
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+              {productCategories.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  Sin categorías en el listado. Crea una con + o recarga la página.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Proveedor</label>
@@ -898,6 +936,19 @@ export function Inventario() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <CategoryAdminDialog
+        open={showCategoryAdminDialog}
+        onOpenChange={setShowCategoryAdminDialog}
+        title="Categorías de producto"
+        description="Edita el nombre o elimina categorías que no tengan productos asociados."
+        categories={productCategories}
+        onReload={loadInventory}
+        onRename={async (id, name) => {
+          await updateInventoryCategory(id, name)
+        }}
+        onDelete={(id) => deleteInventoryCategory(id)}
+      />
 
       <AlertDialog open={deletingProduct !== null} onOpenChange={(open) => !open && setDeletingProduct(null)}>
         <AlertDialogContent>

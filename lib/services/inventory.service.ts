@@ -54,6 +54,40 @@ export async function fetchInventoryCategories(): Promise<InventoryCategoryDto[]
     .filter((x): x is InventoryCategoryDto => x != null)
 }
 
+export async function updateInventoryCategory(
+  id: number,
+  name: string,
+): Promise<InventoryCategoryDto> {
+  const res = await fetch(`${API_BASE}/inventory/categories/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name.trim() }),
+  })
+  const json = await readJson(res)
+  if (!res.ok) {
+    throw new Error(
+      typeof json.message === "string" ? json.message : "No se pudo actualizar la categoría.",
+    )
+  }
+  const d = json.data as Record<string, unknown> | undefined
+  if (!d || d.id == null) {
+    throw new Error("Respuesta inválida del servidor.")
+  }
+  return { id: Number(d.id), name: String(d.name ?? name.trim()) }
+}
+
+export async function deleteInventoryCategory(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/inventory/categories/${id}`, {
+    method: "DELETE",
+  })
+  const json = await readJson(res)
+  if (!res.ok) {
+    throw new Error(
+      typeof json.message === "string" ? json.message : "No se pudo eliminar la categoría.",
+    )
+  }
+}
+
 export async function createInventoryCategory(
   name: string,
 ): Promise<InventoryCategoryDto> {

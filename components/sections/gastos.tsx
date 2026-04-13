@@ -39,6 +39,7 @@ import {
   CalendarDays,
   Eye,
   Pencil,
+  Tags,
 } from "lucide-react"
 import { formatQ } from "@/lib/currency"
 import { useBusiness, type ExpenseEntry } from "@/lib/business-context"
@@ -46,13 +47,16 @@ import {
   createExpense,
   createExpenseCategory,
   deleteExpense,
+  deleteExpenseCategory,
   fetchExpenseById,
   fetchExpenseCategories,
   updateExpense as updateExpenseApi,
+  updateExpenseCategory,
   type ExpenseCategoryDto,
   type ExpenseDetailDto,
 } from "@/lib/services/expenses.service"
 import { Badge } from "@/components/ui/badge"
+import { CategoryAdminDialog } from "@/components/category-admin-dialog"
 
 function categoryNameFromId(
   categoryIdStr: string,
@@ -91,6 +95,7 @@ export function Gastos() {
   const [showExpenseCategoryDialog, setShowExpenseCategoryDialog] = useState(false)
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState("")
   const [savingCategory, setSavingCategory] = useState(false)
+  const [showCategoryAdminDialog, setShowCategoryAdminDialog] = useState(false)
 
   const loadCategories = useCallback(async () => {
     setCategoriesLoading(true)
@@ -362,6 +367,15 @@ export function Gastos() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 gap-2 sm:h-10"
+            onClick={() => setShowCategoryAdminDialog(true)}
+          >
+            <Tags className="h-4 w-4" />
+            Categorías
+          </Button>
           <div className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
             <label htmlFor="gasto-mes" className="text-sm text-muted-foreground">
@@ -817,6 +831,19 @@ export function Gastos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CategoryAdminDialog
+        open={showCategoryAdminDialog}
+        onOpenChange={setShowCategoryAdminDialog}
+        title="Categorías de gasto"
+        description="Edita el nombre o elimina categorías que no tengan gastos registrados."
+        categories={dbCategories}
+        onReload={loadCategories}
+        onRename={async (id, name) => {
+          await updateExpenseCategory(id, name)
+        }}
+        onDelete={(id) => deleteExpenseCategory(id)}
+      />
 
       <Dialog
         open={showExpenseCategoryDialog}

@@ -30,6 +30,38 @@ export async function fetchExpenseCategories(): Promise<ExpenseCategoryDto[]> {
   return json.data ?? []
 }
 
+export async function updateExpenseCategory(
+  id: number,
+  name: string,
+): Promise<ExpenseCategoryDto> {
+  const res = await fetch(`${API_BASE}/expenses/categories/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name.trim() }),
+  })
+  const json = (await res.json().catch(() => ({}))) as {
+    message?: string
+    data?: ExpenseCategoryDto
+  }
+  if (!res.ok) {
+    throw new Error(json.message ?? "No se pudo actualizar la categoría.")
+  }
+  if (!json.data?.id) {
+    throw new Error("Respuesta inválida del servidor.")
+  }
+  return json.data
+}
+
+export async function deleteExpenseCategory(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/expenses/categories/${id}`, {
+    method: "DELETE",
+  })
+  const json = (await res.json().catch(() => ({}))) as { message?: string }
+  if (!res.ok) {
+    throw new Error(json.message ?? "No se pudo eliminar la categoría.")
+  }
+}
+
 export async function createExpenseCategory(name: string): Promise<ExpenseCategoryDto> {
   const res = await fetch(`${API_BASE}/expenses/categories`, {
     method: "POST",
