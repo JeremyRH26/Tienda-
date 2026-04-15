@@ -111,6 +111,57 @@ export type CreateSaleResult = {
   totalAmount: number
 }
 
+export async function updateSaleApi(
+  saleId: number,
+  payload: CreateSalePayload,
+): Promise<CreateSaleResult> {
+  const res = await fetch(`${API_BASE}/sales/${saleId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      employeeId: payload.employeeId,
+      customerId: payload.customerId ?? null,
+      products: payload.products,
+      total: payload.total,
+      paymentMethod: payload.paymentMethod,
+    }),
+  })
+  const json = (await res.json().catch(() => ({}))) as {
+    message?: string
+    detail?: string
+    data?: { saleId?: number; totalAmount?: number }
+  }
+  if (!res.ok) {
+    const base = json.message ?? "No se pudo actualizar la venta."
+    const extra =
+      json.detail && json.detail !== base ? ` — ${json.detail}` : ""
+    throw new Error(base + extra)
+  }
+  const sid = json.data?.saleId
+  const totalAmount = json.data?.totalAmount
+  if (sid == null || !Number.isFinite(Number(sid))) {
+    throw new Error("Respuesta inválida del servidor.")
+  }
+  return {
+    saleId: Number(sid),
+    totalAmount: totalAmount != null ? Number(totalAmount) : payload.total,
+  }
+}
+
+export async function deleteSaleApi(saleId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/sales/${saleId}`, { method: "DELETE" })
+  const json = (await res.json().catch(() => ({}))) as {
+    message?: string
+    detail?: string
+  }
+  if (!res.ok) {
+    const base = json.message ?? "No se pudo eliminar la venta."
+    const extra =
+      json.detail && json.detail !== base ? ` — ${json.detail}` : ""
+    throw new Error(base + extra)
+  }
+}
+
 export async function createSaleApi(
   payload: CreateSalePayload,
 ): Promise<CreateSaleResult> {

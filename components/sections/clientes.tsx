@@ -17,11 +17,13 @@ import {
   ScrollText,
   FileDown,
   MessageCircle,
+  Trash2,
 } from "lucide-react"
 import type { ShopCustomer, PendingCreditLine } from "@/lib/mock-data"
 import {
   createCustomerAbonoApi,
   createCustomerApi,
+  deleteCustomerApi,
   fetchCustomerCreditSales,
   fetchCustomersWithBalance,
   mapCreditSalesToPendingLines,
@@ -40,6 +42,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type Customer = ShopCustomer
 
@@ -75,6 +87,10 @@ export function Clientes() {
     email: "",
   })
   const [savingCustomer, setSavingCustomer] = useState(false)
+  const [customerPendingDelete, setCustomerPendingDelete] = useState<Customer | null>(
+    null,
+  )
+  const [deleteCustomerInFlight, setDeleteCustomerInFlight] = useState(false)
 
   const refreshCustomers = useCallback(async () => {
     setCustomersLoadState("loading")
@@ -222,6 +238,24 @@ export function Clientes() {
       toast.error(e instanceof Error ? e.message : "No se pudo registrar el abono.")
     } finally {
       setSavingCustomer(false)
+    }
+  }
+
+  const handleConfirmDeleteCustomer = async () => {
+    if (!customerPendingDelete) return
+    setDeleteCustomerInFlight(true)
+    try {
+      await deleteCustomerApi(customerPendingDelete.id)
+      toast.success("Cliente eliminado.")
+      setCustomerPendingDelete(null)
+      setSelectedCustomer(null)
+      await refreshCustomers()
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo eliminar el cliente.",
+      )
+    } finally {
+      setDeleteCustomerInFlight(false)
     }
   }
 
@@ -375,6 +409,30 @@ export function Clientes() {
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  aria-label="Eliminar cliente"
+                  title={
+                    customer.balance > 0
+                      ? "Liquide el saldo antes de eliminar"
+                      : "Eliminar cliente"
+                  }
+                  disabled={customer.balance > 0}
+                  onClick={() => {
+                    if (customer.balance > 0) {
+                      toast.error(
+                        "No se puede eliminar mientras tenga saldo deudor. Registre abonos hasta dejar el saldo en cero.",
+                      )
+                      return
+                    }
+                    setCustomerPendingDelete(customer)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
               <div className="mb-4 flex items-start justify-between pr-14">
                 <div className="flex items-center gap-3">
@@ -512,6 +570,31 @@ export function Clientes() {
                     <span>Última compra: {selectedCustomer.lastPurchase}</span>
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                <p className="mb-2 text-sm text-muted-foreground">
+                  Eliminar del directorio solo si el saldo deudor es cero. Las ventas antiguas pueden quedar sin cliente vinculado según la base de datos.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
+                  disabled={selectedCustomer.balance > 0}
+                  onClick={() => {
+                    if (selectedCustomer.balance > 0) {
+                      toast.error(
+                        "Liquide el saldo con abonos antes de eliminar al cliente.",
+                      )
+                      return
+                    }
+                    setCustomerPendingDelete(selectedCustomer)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Eliminar cliente
+                </Button>
               </div>
 
               {selectedCustomer.balance > 0 && selectedCustomer.pendingCreditLines.length > 0 && (
@@ -759,6 +842,41 @@ export function Clientes() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={customerPendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteCustomerInFlight) setCustomerPendingDelete(null)
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará{" "}
+              <span className="font-medium text-foreground">
+                {customerPendingDelete?.name}
+              </span>{" "}
+              del directorio. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCustomerInFlight}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteCustomerInFlight}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmDeleteCustomer()
+              }}
+            >
+              {deleteCustomerInFlight ? "Eliminando…" : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </div>
   )

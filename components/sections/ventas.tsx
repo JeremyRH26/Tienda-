@@ -21,6 +21,7 @@ import {
   Coins,
   TrendingUp,
   Scale,
+  Pencil,
 } from "lucide-react"
 import { mockProducts, type SaleRecord } from "@/lib/mock-data"
 import {
@@ -38,9 +39,11 @@ import {
 } from "@/lib/sales-period"
 import {
   createSaleApi,
+  deleteSaleApi,
   fetchSalesHistory,
   mapApiAbonoToEntry,
   mapApiSaleToSaleRecord,
+  updateSaleApi,
 } from "@/lib/services/sales.service"
 import {
   fetchCustomersWithBalance,
@@ -77,6 +80,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 /** Producto del POS: misma forma que el grid necesita (viene del inventario en API). */
 type PosCatalogProduct = {
@@ -111,6 +124,59 @@ interface CustomCartLine {
   name: string
   quantity: number
   price: number
+}
+
+function matchCatalogProductByName(
+  catalog: PosCatalogProduct[],
+  itemName: string,
+): PosCatalogProduct | undefined {
+  const t = itemName.trim().toLowerCase()
+  return catalog.find((p) => p.name.trim().toLowerCase() === t)
+}
+
+function buildReleasedQtyByProductId(
+  sale: SaleRecord,
+  catalog: PosCatalogProduct[],
+): Record<number, number> {
+  const out: Record<number, number> = {}
+  for (const it of sale.items) {
+    const p = matchCatalogProductByName(catalog, it.name)
+    if (!p) continue
+    out[p.id] = (out[p.id] ?? 0) + it.quantity
+  }
+  return out
+}
+
+function saleRecordToCart(
+  sale: SaleRecord,
+  catalog: PosCatalogProduct[],
+): { cart: CartItem[]; customLines: CustomCartLine[] } {
+  const customLines: CustomCartLine[] = []
+  const byId = new Map<number, CartItem>()
+  for (const it of sale.items) {
+    const p = matchCatalogProductByName(catalog, it.name)
+    if (p) {
+      const prev = byId.get(p.id)
+      if (prev) {
+        byId.set(p.id, {
+          product: { ...prev.product, salePrice: it.price },
+          quantity: prev.quantity + it.quantity,
+        })
+      } else {
+        byId.set(p.id, {
+          product: { ...p, salePrice: it.price },
+          quantity: it.quantity,
+        })
+      }
+    } else {
+      customLines.push({
+        name: it.name,
+        quantity: it.quantity,
+        price: it.price,
+      })
+    }
+  }
+  return { cart: Array.from(byId.values()), customLines }
 }
 
 function dateAtNoon(d: Date): Date {
@@ -208,6 +274,12 @@ export function Ventas() {
   const [showBalanceOpen, setShowBalanceOpen] = useState(false)
   const [selectedSale, setSelectedSale] = useState<SaleRecord | null>(null)
   const [showSaleDetail, setShowSaleDetail] = useState(false)
+  const [editingSaleId, setEditingSaleId] = useState<number | null>(null)
+  const [editingStockBonus, setEditingStockBonus] = useState<Record<number, number>>(
+    {},
+  )
+  const [salePendingDelete, setSalePendingDelete] = useState<SaleRecord | null>(null)
+  const [deleteSaleInFlight, setDeleteSaleInFlight] = useState(false)
   const [selectedAbono, setSelectedAbono] = useState<AbonoEntry | null>(null)
   const [showAbonoDetail, setShowAbonoDetail] = useState(false)
   const [customLines, setCustomLines] = useState<CustomCartLine[]>([])
@@ -238,6 +310,47 @@ export function Ventas() {
     void loadHistoryForPeriod()
   }, [loadHistoryForPeriod])
 
+  const maxQtyForProduct = useCallback(
+    (productId: number) => {
+      const base = posProducts.find((p) => p.id === productId)?.stock ?? 0
+      const bonus =
+        editingSaleId != null ? editingStockBonus[productId] ?? 0 : 0
+      return base + bonus
+    },
+    [posProducts, editingSaleId, editingStockBonus],
+  )
+
+  const cancelEditSale = useCallback(() => {
+    setEditingSaleId(null)
+    setEditingStockBonus({})
+    setCart([])
+    setCustomLines([])
+    setPosFiadoCustomerId("")
+    setPosPaymentMethod("efectivo")
+  }, [])
+
+  const beginEditSale = useCallback(
+    (sale: SaleRecord) => {
+      const { cart: nextCart, customLines: cl } = saleRecordToCart(sale, posProducts)
+      setCart(nextCart)
+      setCustomLines(cl)
+      setPosPaymentMethod(sale.paymentMethod)
+      setPosFiadoCustomerId(
+        sale.paymentMethod === "fiado" &&
+          sale.customerId != null &&
+          sale.customerId > 0
+          ? String(sale.customerId)
+          : "",
+      )
+      setEditingSaleId(sale.id)
+      setEditingStockBonus(buildReleasedQtyByProductId(sale, posProducts))
+      setShowSaleDetail(false)
+      setSelectedSale(null)
+      setActiveTab("pos")
+    },
+    [posProducts],
+  )
+
   const filteredProducts = posProducts.filter(
     (product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -245,12 +358,13 @@ export function Ventas() {
   )
 
   const addToCart = (product: PosCatalogProduct) => {
-    if (product.stock <= 0) return
+    const cap = maxQtyForProduct(product.id)
+    if (cap <= 0) return
     setCart((prev) => {
       const existing = prev.find((item) => item.product.id === product.id)
       if (existing) {
         const nextQty = existing.quantity + 1
-        if (nextQty > product.stock) return prev
+        if (nextQty > cap) return prev
         return prev.map((item) =>
           item.product.id === product.id
             ? { ...item, quantity: nextQty }
@@ -262,12 +376,13 @@ export function Ventas() {
   }
 
   const updateQuantity = (productId: number, delta: number) => {
+    const cap = maxQtyForProduct(productId)
     setCart((prev) =>
       prev
         .map((item) => {
           if (item.product.id !== productId) return item
           const next = Math.max(0, item.quantity + delta)
-          const capped = Math.min(next, item.product.stock)
+          const capped = Math.min(next, cap)
           return { ...item, quantity: capped }
         })
         .filter((item) => item.quantity > 0),
@@ -383,15 +498,23 @@ export function Ventas() {
         quantity: item.quantity,
         unitPrice: item.product.salePrice,
       }))
-      await createSaleApi({
+      const payload = {
         employeeId: user.id,
         customerId:
           posPaymentMethod === "fiado" ? Number(posFiadoCustomerId) : null,
         products,
         total,
         paymentMethod: posPaymentMethod,
-      })
-      toast.success("Venta registrada.")
+      }
+      if (editingSaleId != null) {
+        await updateSaleApi(editingSaleId, payload)
+        toast.success("Venta actualizada.")
+        setEditingSaleId(null)
+        setEditingStockBonus({})
+      } else {
+        await createSaleApi(payload)
+        toast.success("Venta registrada.")
+      }
       setCart([])
       setCustomLines([])
       setPosFiadoCustomerId("")
@@ -404,6 +527,30 @@ export function Ventas() {
       )
     } finally {
       setCheckoutLoading(false)
+    }
+  }
+
+  const handleConfirmDeleteSale = async () => {
+    const del = salePendingDelete
+    if (!del) return
+    setDeleteSaleInFlight(true)
+    try {
+      await deleteSaleApi(del.id)
+      toast.success("Venta eliminada.")
+      setSalePendingDelete(null)
+      setShowSaleDetail(false)
+      setSelectedSale(null)
+      if (editingSaleId != null && editingSaleId === del.id) {
+        cancelEditSale()
+      }
+      await loadPosCatalog()
+      await loadHistoryForPeriod()
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo eliminar la venta.",
+      )
+    } finally {
+      setDeleteSaleInFlight(false)
     }
   }
 
@@ -606,7 +753,13 @@ export function Ventas() {
           }
           onClick={() => void handleCheckout()}
         >
-          {checkoutLoading ? "Registrando…" : "Cobrar"}
+          {checkoutLoading
+            ? editingSaleId != null
+              ? "Guardando…"
+              : "Registrando…"
+            : editingSaleId != null
+              ? "Guardar cambios"
+              : "Cobrar"}
         </Button>
         {!user && authReady ? (
           <p className="text-center text-xs text-destructive">
@@ -614,7 +767,9 @@ export function Ventas() {
           </p>
         ) : (
           <p className="text-center text-xs text-muted-foreground">
-            El inventario se actualiza al cobrar. Fiado exige cliente y descuenta stock.
+            {editingSaleId != null
+              ? "Al guardar se reemplazan las líneas de la venta y se ajusta el inventario."
+              : "El inventario se actualiza al cobrar. Fiado exige cliente y descuenta stock."}
           </p>
         )}
       </div>
@@ -646,6 +801,22 @@ export function Ventas() {
         </div>
 
         <TabsContent value="pos" className="mt-4 space-y-3">
+          {editingSaleId != null ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm">
+              <span className="font-medium text-amber-950 dark:text-amber-100">
+                Editando venta #{editingSaleId} — al guardar se actualizan líneas y totales; la fecha original de la venta se conserva en el servidor.
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0 border-amber-600/50"
+                onClick={() => cancelEditSale()}
+              >
+                Cancelar edición
+              </Button>
+            </div>
+          ) : null}
           <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
             {/* Products Grid */}
             <div className="flex min-h-0 flex-1 flex-col space-y-4">
@@ -722,7 +893,7 @@ export function Ventas() {
                 ) : (
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
                     {filteredProducts.map((product) => {
-                      const outOfStock = product.stock <= 0
+                      const outOfStock = maxQtyForProduct(product.id) <= 0
                       return (
                         <Card
                           key={product.id}
@@ -1236,11 +1407,61 @@ export function Ventas() {
                     <FileDown className="h-4 w-4" />
                     Generar PDF recibo
                   </Button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 gap-2"
+                      onClick={() => beginEditSale(selectedSale)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
+                      onClick={() => setSalePendingDelete(selectedSale)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Eliminar
+                    </Button>
+                  </div>
                 </div>
               )
             })()}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={salePendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteSaleInFlight) setSalePendingDelete(null)
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar esta venta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se anulará la venta #{salePendingDelete?.id}, se restaurará el stock de los productos y
+              desaparecerá del historial. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSaleInFlight}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteSaleInFlight}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmDeleteSale()
+              }}
+            >
+              {deleteSaleInFlight ? "Eliminando…" : "Eliminar venta"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog
         open={showAbonoDetail}

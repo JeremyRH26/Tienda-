@@ -17,7 +17,10 @@ export type CustomerDto = {
 export type CreditSaleDto = {
   saleId: number
   saleDate: string
+  /** Total original de la factura a crédito. */
   totalAmount: number
+  /** Saldo restante de esta factura tras aplicar abonos (FIFO por fecha). */
+  balanceRemaining?: number
   items: { name: string; quantity: number; price: number }[]
 }
 
@@ -48,18 +51,24 @@ export function mapCustomerDtoToShopCustomer(
 }
 
 export function mapCreditSalesToPendingLines(sales: CreditSaleDto[]): PendingCreditLine[] {
-  return sales.map((s) => ({
-    id: `sale-${s.saleId}`,
-    fecha: formatShortDate(s.saleDate),
-    descripcion: "Venta al fiado",
-    totalOriginal: s.totalAmount,
-    saldoPendiente: s.totalAmount,
-    items: s.items.map((i) => ({
-      name: i.name,
-      quantity: i.quantity,
-      price: i.price,
-    })),
-  }))
+  return sales.map((s) => {
+    const pendiente =
+      s.balanceRemaining != null && Number.isFinite(s.balanceRemaining)
+        ? s.balanceRemaining
+        : s.totalAmount
+    return {
+      id: `sale-${s.saleId}`,
+      fecha: formatShortDate(s.saleDate),
+      descripcion: "Venta al fiado",
+      totalOriginal: s.totalAmount,
+      saldoPendiente: Math.round(pendiente * 100) / 100,
+      items: s.items.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        price: i.price,
+      })),
+    }
+  })
 }
 
 export async function fetchCustomersWithBalance(): Promise<CustomerDto[]> {
@@ -81,6 +90,7 @@ export async function fetchCustomerCreditSales(
       saleId: number
       saleDate: string
       totalAmount: number
+      balanceRemaining?: number
       items: { name: string; quantity: number; price: number }[]
     }[]
   }
@@ -92,6 +102,7 @@ export async function fetchCustomerCreditSales(
     saleId: r.saleId,
     saleDate: r.saleDate,
     totalAmount: r.totalAmount,
+    balanceRemaining: r.balanceRemaining,
     items: r.items ?? [],
   }))
 }
@@ -118,6 +129,20 @@ export async function createCustomerApi(payload: {
     throw new Error("Respuesta inválida del servidor.")
   }
   return json.data
+}
+
+export async function deleteCustomerApi(id: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/customers/${id}`, { method: "DELETE" })
+  const json = (await res.json().catch(() => ({}))) as {
+    message?: string
+    detail?: string
+  }
+  if (!res.ok) {
+    const base = json.message ?? "No se pudo eliminar el cliente."
+    const extra =
+      json.detail && json.detail !== base ? ` — ${json.detail}` : ""
+    throw new Error(base + extra)
+  }
 }
 
 export async function updateCustomerApi(
