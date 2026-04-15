@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,7 +15,6 @@ import {
   Receipt,
   Clock,
   Eye,
-  Pencil,
   CalendarDays,
   FileDown,
   Landmark,
@@ -22,18 +22,30 @@ import {
   TrendingUp,
   Scale,
 } from "lucide-react"
-import { mockProducts, mockSalesHistoryExtended, type SaleRecord } from "@/lib/mock-data"
+import { mockProducts, type SaleRecord } from "@/lib/mock-data"
 import {
   fetchInventoryProducts,
   type InventoryProductDto,
 } from "@/lib/services/inventory.service"
 import { formatQ, isSameCalendarDay } from "@/lib/currency"
 import { useBusiness, type AbonoEntry } from "@/lib/business-context"
+import { useAuth } from "@/lib/auth-context"
 import {
   filterSalesByPeriod,
   formatSalesHistoryPeriodCaption,
+  getSalesApiDateRange,
   type SalesPrintPeriod,
 } from "@/lib/sales-period"
+import {
+  createSaleApi,
+  fetchSalesHistory,
+  mapApiAbonoToEntry,
+  mapApiSaleToSaleRecord,
+} from "@/lib/services/sales.service"
+import {
+  fetchCustomersWithBalance,
+  type CustomerDto,
+} from "@/lib/services/customers.service"
 import {
   aggregateProfitForSales,
   saleProfitBreakdown,
@@ -58,15 +70,13 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 
 /** Producto del POS: misma forma que el grid necesita (viene del inventario en API). */
 type PosCatalogProduct = {
@@ -103,35 +113,6 @@ interface CustomCartLine {
   price: number
 }
 
-function deserializeSaleToCart(
-  sale: SaleRecord,
-  catalog: PosCatalogProduct[],
-): {
-  cart: CartItem[]
-  customLines: CustomCartLine[]
-} {
-  const customLines: CustomCartLine[] = []
-  const byId = new Map<number, CartItem>()
-  for (const line of sale.items) {
-    const p = catalog.find((x) => x.name.trim() === line.name.trim())
-    if (p) {
-      const ex = byId.get(p.id)
-      if (ex) {
-        byId.set(p.id, { product: p, quantity: ex.quantity + line.quantity })
-      } else {
-        byId.set(p.id, { product: p, quantity: line.quantity })
-      }
-    } else {
-      customLines.push({
-        name: line.name.trim() || "Sin nombre",
-        quantity: line.quantity,
-        price: line.price,
-      })
-    }
-  }
-  return { cart: Array.from(byId.values()), customLines }
-}
-
 function dateAtNoon(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0)
 }
@@ -145,7 +126,8 @@ type HistoryRow =
   | { kind: "abono"; abono: AbonoEntry }
 
 export function Ventas() {
-  const { abonos } = useBusiness()
+  const { user, ready: authReady } = useAuth()
+  const { abonos, mergeAbonosFromServer } = useBusiness()
   const [posProducts, setPosProducts] = useState<PosCatalogProduct[]>([])
   const [posLoadState, setPosLoadState] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -169,6 +151,23 @@ export function Ventas() {
     void loadPosCatalog()
   }, [loadPosCatalog])
 
+  useEffect(() => {
+    let cancelled = false
+    void fetchCustomersWithBalance()
+      .then((rows) => {
+        if (cancelled) return
+        setPosCustomers(
+          [...rows].sort((a, b) => a.fullName.localeCompare(b.fullName, "es")),
+        )
+      })
+      .catch(() => {
+        if (cancelled) return
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   /** Costos para márgenes: inventario real + nombres del catálogo demo (historial mock). */
   const catalogForProfit = useMemo((): CatalogProduct[] => {
     const seen = new Set<string>()
@@ -191,9 +190,17 @@ export function Ventas() {
   const [searchTerm, setSearchTerm] = useState("")
   const [cart, setCart] = useState<CartItem[]>([])
   const [mobileCartOpen, setMobileCartOpen] = useState(false)
-  const [salesHistory, setSalesHistory] = useState<SaleRecord[]>(() =>
-    mockSalesHistoryExtended.map((s) => ({ ...s, timestamp: new Date(s.timestamp) }))
-  )
+  const [salesHistory, setSalesHistory] = useState<SaleRecord[]>([])
+  const [historyLoadState, setHistoryLoadState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle")
+  const [historyLoadError, setHistoryLoadError] = useState<string | null>(null)
+  const [posCustomers, setPosCustomers] = useState<CustomerDto[]>([])
+  const [posPaymentMethod, setPosPaymentMethod] = useState<
+    "efectivo" | "tarjeta" | "fiado"
+  >("efectivo")
+  const [posFiadoCustomerId, setPosFiadoCustomerId] = useState<string>("")
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
   const [historyViewPeriod, setHistoryViewPeriod] =
     useState<SalesPrintPeriod>("day")
   const [historyRefDate, setHistoryRefDate] = useState(() => dateAtNoon(new Date()))
@@ -203,11 +210,33 @@ export function Ventas() {
   const [showSaleDetail, setShowSaleDetail] = useState(false)
   const [selectedAbono, setSelectedAbono] = useState<AbonoEntry | null>(null)
   const [showAbonoDetail, setShowAbonoDetail] = useState(false)
-  const [saleToDelete, setSaleToDelete] = useState<SaleRecord | null>(null)
-  const [editingSale, setEditingSale] = useState<SaleRecord | null>(null)
   const [customLines, setCustomLines] = useState<CustomCartLine[]>([])
   const [activeTab, setActiveTab] = useState("pos")
   const [historyProductSearch, setHistoryProductSearch] = useState("")
+
+  const loadHistoryForPeriod = useCallback(async () => {
+    setHistoryLoadState("loading")
+    setHistoryLoadError(null)
+    try {
+      const { dateStart, dateEnd } = getSalesApiDateRange(
+        historyViewPeriod,
+        historyRefDate,
+      )
+      const bundle = await fetchSalesHistory(dateStart, dateEnd)
+      setSalesHistory(bundle.sales.map(mapApiSaleToSaleRecord))
+      mergeAbonosFromServer(bundle.abonos.map(mapApiAbonoToEntry))
+      setHistoryLoadState("ready")
+    } catch (e) {
+      setHistoryLoadState("error")
+      setHistoryLoadError(
+        e instanceof Error ? e.message : "No se pudo cargar el historial.",
+      )
+    }
+  }, [historyViewPeriod, historyRefDate, mergeAbonosFromServer])
+
+  useEffect(() => {
+    void loadHistoryForPeriod()
+  }, [loadHistoryForPeriod])
 
   const filteredProducts = posProducts.filter(
     (product) =>
@@ -295,7 +324,10 @@ export function Ventas() {
     if (!q) return historyRows
     return historyRows.filter((row) => {
       if (row.kind === "sale") {
-        return row.sale.items.some((i) => i.name.toLowerCase().includes(q))
+        return (
+          row.sale.customer.toLowerCase().includes(q) ||
+          row.sale.items.some((i) => i.name.toLowerCase().includes(q))
+        )
       }
       const note = (row.abono.note ?? "").toLowerCase()
       return row.abono.customerName.toLowerCase().includes(q) || note.includes(q)
@@ -322,25 +354,57 @@ export function Ventas() {
     historyRefDate
   )
 
-  const startEditingSale = (sale: SaleRecord) => {
-    const { cart: nextCart, customLines: nextCustom } = deserializeSaleToCart(
-      sale,
-      posProducts,
-    )
-    setEditingSale(sale)
-    setCart(nextCart)
-    setCustomLines(nextCustom)
-    setActiveTab("pos")
-    setShowSaleDetail(false)
-    setSelectedSale(null)
-    setMobileCartOpen(false)
-    setSearchTerm("")
-  }
-
-  const cancelEditingSale = () => {
-    setEditingSale(null)
-    setCart([])
-    setCustomLines([])
+  const handleCheckout = async () => {
+    if (!authReady || !user) {
+      toast.error("Inicia sesión para cobrar.")
+      return
+    }
+    if (cart.length === 0 && customLines.length === 0) {
+      toast.error("Agrega productos al carrito.")
+      return
+    }
+    if (customLines.length > 0) {
+      toast.error(
+        "Las líneas fuera de catálogo no se pueden registrar en el servidor.",
+      )
+      return
+    }
+    if (posPaymentMethod === "fiado") {
+      const cid = Number(posFiadoCustomerId)
+      if (!Number.isFinite(cid) || cid <= 0) {
+        toast.error("Selecciona el cliente para el fiado.")
+        return
+      }
+    }
+    setCheckoutLoading(true)
+    try {
+      const products = cart.map((item) => ({
+        productId: item.product.id,
+        quantity: item.quantity,
+        unitPrice: item.product.salePrice,
+      }))
+      await createSaleApi({
+        employeeId: user.id,
+        customerId:
+          posPaymentMethod === "fiado" ? Number(posFiadoCustomerId) : null,
+        products,
+        total,
+        paymentMethod: posPaymentMethod,
+      })
+      toast.success("Venta registrada.")
+      setCart([])
+      setCustomLines([])
+      setPosFiadoCustomerId("")
+      setPosPaymentMethod("efectivo")
+      await loadPosCatalog()
+      await loadHistoryForPeriod()
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo registrar la venta.",
+      )
+    } finally {
+      setCheckoutLoading(false)
+    }
   }
 
   const removeCustomLine = (index: number) => {
@@ -480,24 +544,79 @@ export function Ventas() {
         )}
       </div>
 
-      {/* Total & Checkout */}
-      <div className="border-t p-4">
-        <div className="mb-4 flex items-center justify-between">
+      {/* Pago y cobro */}
+      <div className="border-t p-4 space-y-3">
+        <div className="space-y-2">
+          <Label className="text-xs text-muted-foreground">Forma de pago</Label>
+          <Select
+            value={posPaymentMethod}
+            onValueChange={(v) =>
+              setPosPaymentMethod(v as "efectivo" | "tarjeta" | "fiado")
+            }
+          >
+            <SelectTrigger className="h-10">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="efectivo">Efectivo</SelectItem>
+              <SelectItem value="tarjeta">Tarjeta</SelectItem>
+              <SelectItem value="fiado">Fiado / crédito</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {posPaymentMethod === "fiado" ? (
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Cliente</Label>
+            <Select
+              value={posFiadoCustomerId || undefined}
+              onValueChange={(v) => setPosFiadoCustomerId(v)}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Selecciona cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {posCustomers.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {posCustomers.length === 0 ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                No hay clientes en el directorio. Créalos en el módulo Clientes.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="flex items-center justify-between pt-1">
           <span className="text-sm font-medium text-muted-foreground">Total</span>
-          <span className="text-2xl font-bold text-primary">
+          <span className="text-2xl font-bold text-primary tabular-nums">
             {formatQ(total)}
           </span>
         </div>
         <Button
+          type="button"
           className="h-12 w-full text-base"
-          disabled
-          title="El registro de ventas en el servidor aún no está habilitado."
+          disabled={
+            checkoutLoading ||
+            cart.length + customLines.length === 0 ||
+            !authReady ||
+            !user
+          }
+          onClick={() => void handleCheckout()}
         >
-          {editingSale ? "Guardar cambios…" : "Cobrar"}
+          {checkoutLoading ? "Registrando…" : "Cobrar"}
         </Button>
-        <p className="mt-2 text-center text-xs text-muted-foreground">
-          Cobro deshabilitado: solo se muestran productos del inventario real.
-        </p>
+        {!user && authReady ? (
+          <p className="text-center text-xs text-destructive">
+            Inicia sesión para registrar ventas.
+          </p>
+        ) : (
+          <p className="text-center text-xs text-muted-foreground">
+            El inventario se actualiza al cobrar. Fiado exige cliente y descuenta stock.
+          </p>
+        )}
       </div>
     </>
   )
@@ -509,7 +628,7 @@ export function Ventas() {
           <div>
             <h1 className="text-xl font-bold text-foreground sm:text-2xl">Punto de Venta</h1>
             <p className="text-sm text-muted-foreground sm:text-base">
-              Catálogo del POS cargado desde tu inventario. El cobro queda deshabilitado hasta conectar el registro de ventas.
+              Catálogo desde inventario; las ventas se guardan en el servidor (efectivo, tarjeta o fiado).
             </p>
           </div>
           <TabsList className="grid w-full grid-cols-2 sm:w-auto">
@@ -527,14 +646,6 @@ export function Ventas() {
         </div>
 
         <TabsContent value="pos" className="mt-4 space-y-3">
-          {editingSale ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 dark:bg-amber-950/30">
-              <p className="text-sm font-medium">Editando venta #{editingSale.id}</p>
-              <Button type="button" variant="outline" size="sm" onClick={cancelEditingSale}>
-                Cancelar edición
-              </Button>
-            </div>
-          ) : null}
           <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
             {/* Products Grid */}
             <div className="flex min-h-0 flex-1 flex-col space-y-4">
@@ -702,6 +813,14 @@ export function Ventas() {
 
         <TabsContent value="history" className="mt-4 space-y-4">
           <div className="flex flex-col gap-3">
+            {historyLoadState === "loading" ? (
+              <p className="text-sm text-muted-foreground">Cargando historial…</p>
+            ) : null}
+            {historyLoadState === "error" && historyLoadError ? (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                {historyLoadError}
+              </div>
+            ) : null}
             <p className="text-sm font-medium text-foreground">{historyPeriodCaption}</p>
             <div className="flex flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center xl:justify-between">
               <div className="flex flex-wrap items-center gap-2">
@@ -924,26 +1043,6 @@ export function Ventas() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground"
-                            aria-label="Editar venta"
-                            onClick={() => startEditingSale(row.sale)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            aria-label="Eliminar venta"
-                            onClick={() => setSaleToDelete(row.sale)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
                     ) : (
@@ -1012,8 +1111,9 @@ export function Ventas() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Balance</DialogTitle>
-            <DialogDescription className="sr-only">
-              Resumen del periodo seleccionado en historial
+            <DialogDescription>
+              Resumen del periodo del historial. Solo entran ventas cobradas (efectivo y tarjeta): los
+              fiados no suman a ingresos ni ganancia hasta que el cliente pague (abono).
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
@@ -1190,39 +1290,6 @@ export function Ventas() {
           )}
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={saleToDelete !== null} onOpenChange={(open) => !open && setSaleToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Eliminar esta venta?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción quitará el registro del historial. No se puede deshacer.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (saleToDelete) {
-                  const id = saleToDelete.id
-                  setSalesHistory((prev) => prev.filter((s) => s.id !== id))
-                  if (selectedSale?.id === id) {
-                    setSelectedSale(null)
-                    setShowSaleDetail(false)
-                  }
-                  if (editingSale?.id === id) {
-                    cancelEditingSale()
-                  }
-                }
-                setSaleToDelete(null)
-              }}
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

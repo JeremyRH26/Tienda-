@@ -13,16 +13,13 @@ import {
   fetchExpenses,
   type ExpenseDetailDto,
 } from "@/lib/services/expenses.service"
+import type { AbonoEntry } from "@/lib/services/sales.service"
+import {
+  defaultAbonoFetchRange,
+  fetchCustomerAbonosRange,
+} from "@/lib/services/customers.service"
 
-export type AbonoEntry = {
-  id: string
-  timestamp: Date
-  customerId: number
-  customerName: string
-  amount: number
-  /** Nota opcional; aparece en el historial del día del abono. */
-  note: string
-}
+export type { AbonoEntry }
 
 /** Id de categoría de gasto (predefinidas o creadas por el usuario). */
 export type ExpenseCategoryId = string
@@ -45,7 +42,10 @@ type BusinessContextValue = {
     amount: number
     timestamp?: Date
     note?: string
+    /** Id del registro en `customer_account` (evita duplicar al hidratar desde API). */
+    id?: string
   }) => void
+  mergeAbonosFromServer: (entries: AbonoEntry[]) => void
   expenses: ExpenseEntry[]
   registerExpense: (entry: {
     date: Date
@@ -93,6 +93,34 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [abonos, setAbonos] = useState<AbonoEntry[]>([])
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([])
 
+  const mergeAbonosFromServer = useCallback((entries: AbonoEntry[]) => {
+    setAbonos((prev) => {
+      const map = new Map(prev.map((a) => [a.id, a]))
+      for (const e of entries) {
+        map.set(e.id, e)
+      }
+      return Array.from(map.values()).sort(
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
+      )
+    })
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const { dateStart, dateEnd } = defaultAbonoFetchRange()
+    void fetchCustomerAbonosRange(dateStart, dateEnd)
+      .then((rows) => {
+        if (cancelled) return
+        mergeAbonosFromServer(rows)
+      })
+      .catch(() => {
+        if (cancelled) return
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [mergeAbonosFromServer])
+
   useEffect(() => {
     let cancelled = false
     void fetchExpenses()
@@ -126,20 +154,29 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       amount: number
       timestamp?: Date
       note?: string
+      id?: string
     }) => {
-      abonoSeq += 1
-      const id = `abono-${Date.now()}-${abonoSeq}`
-      setAbonos((prev) => [
-        ...prev,
-        {
-          id,
-          timestamp: entry.timestamp ?? new Date(),
-          customerId: entry.customerId,
-          customerName: entry.customerName,
-          amount: entry.amount,
-          note: (entry.note ?? "").trim(),
-        },
-      ])
+      const id =
+        entry.id != null && entry.id !== ""
+          ? entry.id
+          : (() => {
+              abonoSeq += 1
+              return `abono-${Date.now()}-${abonoSeq}`
+            })()
+      setAbonos((prev) => {
+        if (prev.some((a) => a.id === id)) return prev
+        return [
+          {
+            id,
+            timestamp: entry.timestamp ?? new Date(),
+            customerId: entry.customerId,
+            customerName: entry.customerName,
+            amount: entry.amount,
+            note: (entry.note ?? "").trim(),
+          },
+          ...prev,
+        ]
+      })
     },
     []
   )
@@ -212,12 +249,21 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     () => ({
       abonos,
       registerAbono,
+      mergeAbonosFromServer,
       expenses,
       registerExpense,
       removeExpense,
       updateExpense,
     }),
-    [abonos, registerAbono, expenses, registerExpense, removeExpense, updateExpense]
+    [
+      abonos,
+      registerAbono,
+      mergeAbonosFromServer,
+      expenses,
+      registerExpense,
+      removeExpense,
+      updateExpense,
+    ],
   )
 
   return (
