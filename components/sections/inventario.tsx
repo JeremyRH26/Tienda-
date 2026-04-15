@@ -199,6 +199,7 @@ export function Inventario() {
   const totalProducts = products.length
   const totalValue = products.reduce((acc, p) => acc + p.salePrice * p.stock, 0)
   const totalMargin = products.reduce((acc, p) => acc + (p.salePrice - p.costPrice) * p.stock, 0)
+  const initialLoading = loading && products.length === 0
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -623,6 +624,45 @@ export function Inventario() {
         </div>
       </div>
 
+      {initialLoading ? (
+        <div className="space-y-4 sm:space-y-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, idx) => (
+              <Card key={`inv-skeleton-stat-${idx}`} className="shadow-sm">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="h-16 animate-pulse rounded-md bg-muted" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card className="shadow-sm">
+            <CardContent className="p-3 sm:p-4">
+              <div className="h-12 animate-pulse rounded-md bg-muted" />
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="h-5 w-32 animate-pulse rounded bg-muted" />
+            </CardHeader>
+            <CardContent className="p-4 sm:p-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 8 }).map((_, idx) => (
+                  <div
+                    key={`inv-skeleton-card-${idx}`}
+                    className="h-64 animate-pulse rounded-lg border bg-muted/50"
+                  />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      <div
+        className={`space-y-4 sm:space-y-6 transition-all duration-700 ${
+          initialLoading ? "pointer-events-none translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+        }`}
+      >
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card className="shadow-sm">
@@ -812,6 +852,7 @@ export function Inventario() {
           </div>
         </CardContent>
       </Card>
+      </div>
 
       <Dialog open={editingProduct !== null} onOpenChange={(open) => !open && setEditingProduct(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">

@@ -143,6 +143,7 @@ export function Clientes() {
 
   const totalDebt = customers.reduce((acc, c) => acc + c.balance, 0)
   const customersWithDebt = customers.filter((c) => c.balance > 0).length
+  const initialLoading = customersLoadState === "loading" && customers.length === 0
 
   const handleAddCustomer = async () => {
     if (!newCustomer.name.trim() || !newCustomer.phone.trim()) {
@@ -331,6 +332,35 @@ export function Clientes() {
         </Dialog>
       </div>
 
+      {initialLoading ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <Card key={`cust-skeleton-stat-${idx}`} className="shadow-sm">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="h-16 animate-pulse rounded-md bg-muted" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="h-11 animate-pulse rounded-md bg-muted sm:h-12" />
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <Card key={`cust-skeleton-card-${idx}`} className="shadow-sm">
+                <CardContent className="p-6">
+                  <div className="h-40 animate-pulse rounded-md bg-muted" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div
+        className={`space-y-6 transition-all duration-700 ${
+          initialLoading ? "pointer-events-none translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+        }`}
+      >
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <Card className="shadow-sm">
@@ -505,6 +535,7 @@ export function Clientes() {
             </CardContent>
           </Card>
         ))}
+      </div>
       </div>
 
       {/* Customer Detail Dialog */}
