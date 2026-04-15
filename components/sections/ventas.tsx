@@ -754,8 +754,8 @@ export function Ventas() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="efectivo">Efectivo</SelectItem>
-              <SelectItem value="tarjeta">Tarjeta</SelectItem>
-              <SelectItem value="fiado">Fiado / crédito</SelectItem>
+              <SelectItem value="tarjeta">Tarjeta o Transferencia Bancaria</SelectItem>
+              <SelectItem value="fiado">Fiado o crédito</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -776,7 +776,7 @@ export function Ventas() {
             </Button>
             {posCustomers.length === 0 ? (
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                No hay clientes en el directorio. Créalos en el módulo Clientes.
+                No hay clientes en el directorio.
               </p>
             ) : null}
           </div>
@@ -828,7 +828,7 @@ export function Ventas() {
           <div>
             <h1 className="text-xl font-bold text-foreground sm:text-2xl">Punto de Venta</h1>
             <p className="text-sm text-muted-foreground sm:text-base">
-              Catálogo desde inventario; las ventas se guardan en el servidor (efectivo, tarjeta o fiado).
+              Se registran ventas con efectivo, tarjeta o fiado (crédito).
             </p>
           </div>
           <TabsList className="grid w-full grid-cols-2 sm:w-auto">
@@ -933,7 +933,7 @@ export function Ventas() {
                   </div>
                 ) : filteredProducts.length === 0 ? (
                   <p className="py-12 text-center text-sm text-muted-foreground">
-                    No hay productos activos en inventario. Agrega productos en el módulo Inventario.
+                    No hay productos en el inventario.
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4">
@@ -984,7 +984,7 @@ export function Ventas() {
                                   outOfStock ? "text-xs font-medium text-destructive" : "text-xs text-muted-foreground"
                                 }
                               >
-                                {outOfStock ? "Sin stock" : product.stock}
+                                Existencias: {product.stock}
                               </span>
                             </div>
                           </CardContent>

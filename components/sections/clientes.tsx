@@ -196,7 +196,7 @@ export function Clientes() {
           : cur,
       )
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "No se pudo guardar.")
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar el cliente.")
     } finally {
       setSavingCustomer(false)
     }
@@ -228,7 +228,7 @@ export function Clientes() {
         amount: applied,
         note: paymentNote,
       })
-      toast.success("Abono registrado.")
+      toast.success("Abono registrado correctamente.")
       setShowPayment(false)
       setPaymentAmount("")
       setPaymentNote("")
@@ -246,7 +246,7 @@ export function Clientes() {
     setDeleteCustomerInFlight(true)
     try {
       await deleteCustomerApi(customerPendingDelete.id)
-      toast.success("Cliente eliminado.")
+      toast.success("Cliente eliminado correctamente.")
       setCustomerPendingDelete(null)
       setSelectedCustomer(null)
       await refreshCustomers()
@@ -266,7 +266,7 @@ export function Clientes() {
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Clientes</h1>
           <p className="text-sm text-muted-foreground sm:text-base">
-            Directorio y saldos desde el servidor (ventas a crédito y abonos).
+            Directorio y saldos pendientes de clientes.
           </p>
           {customersLoadState === "error" && customersError ? (
             <p className="mt-2 text-sm text-destructive">{customersError}</p>
@@ -282,11 +282,11 @@ export function Clientes() {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Agregar Nuevo Cliente</DialogTitle>
-              <DialogDescription>Ingresa los datos del nuevo cliente para agregarlo al directorio.</DialogDescription>
+              <DialogDescription>Ingrese los datos del nuevo cliente para agregarlo al directorio.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Nombre Completo</label>
+                <label className="text-sm font-medium">Nombre Completo:</label>
                 <Input
                   value={newCustomer.name}
                   onChange={(e) =>
@@ -297,7 +297,7 @@ export function Clientes() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Teléfono</label>
+                <label className="text-sm font-medium">Teléfono:</label>
                 <Input
                   value={newCustomer.phone}
                   onChange={(e) =>
@@ -308,7 +308,7 @@ export function Clientes() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email (opcional)</label>
+                <label className="text-sm font-medium">Correo electrónico: (opcional)</label>
                 <Input
                   type="email"
                   value={newCustomer.email}
