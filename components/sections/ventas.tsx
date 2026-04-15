@@ -22,6 +22,8 @@ import {
   TrendingUp,
   Scale,
   Pencil,
+  Users,
+  Package,
 } from "lucide-react"
 import { mockProducts, type SaleRecord } from "@/lib/mock-data"
 import {
@@ -40,10 +42,12 @@ import {
 import {
   createSaleApi,
   deleteSaleApi,
+  fetchPeriodFinancialBreakdown,
   fetchSalesHistory,
   mapApiAbonoToEntry,
   mapApiSaleToSaleRecord,
   updateSaleApi,
+  type PeriodFinancialBreakdownDto,
 } from "@/lib/services/sales.service"
 import {
   fetchCustomersWithBalance,
@@ -90,6 +94,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 /** Producto del POS: misma forma que el grid necesita (viene del inventario en API). */
 type PosCatalogProduct = {
@@ -285,10 +290,15 @@ export function Ventas() {
   const [customLines, setCustomLines] = useState<CustomCartLine[]>([])
   const [activeTab, setActiveTab] = useState("pos")
   const [historyProductSearch, setHistoryProductSearch] = useState("")
+  const [periodFinancials, setPeriodFinancials] =
+    useState<PeriodFinancialBreakdownDto | null>(null)
+  const [fiadoPickerOpen, setFiadoPickerOpen] = useState(false)
+  const [fiadoCustomerSearch, setFiadoCustomerSearch] = useState("")
 
   const loadHistoryForPeriod = useCallback(async () => {
     setHistoryLoadState("loading")
     setHistoryLoadError(null)
+    setPeriodFinancials(null)
     try {
       const { dateStart, dateEnd } = getSalesApiDateRange(
         historyViewPeriod,
@@ -297,6 +307,12 @@ export function Ventas() {
       const bundle = await fetchSalesHistory(dateStart, dateEnd)
       setSalesHistory(bundle.sales.map(mapApiSaleToSaleRecord))
       mergeAbonosFromServer(bundle.abonos.map(mapApiAbonoToEntry))
+      try {
+        const fin = await fetchPeriodFinancialBreakdown(dateStart, dateEnd)
+        setPeriodFinancials(fin)
+      } catch {
+        setPeriodFinancials(null)
+      }
       setHistoryLoadState("ready")
     } catch (e) {
       setHistoryLoadState("error")
@@ -463,6 +479,38 @@ export function Ventas() {
     () => aggregateProfitForSales(visibleSalesPaid, catalogForProfit),
     [visibleSalesPaid, catalogForProfit],
   )
+
+  const visibleAbonosCashSum = useMemo(
+    () => visibleAbonos.reduce((acc, a) => acc + a.amount, 0),
+    [visibleAbonos],
+  )
+
+  const periodIngresoTotal = periodFinancials
+    ? periodFinancials.totals.revenue
+    : periodRevenueTotal + visibleAbonosCashSum
+  const periodCapitalTotal = periodFinancials
+    ? periodFinancials.totals.cost
+    : balanceTotals.totalCost
+  const periodGananciaTotal = periodFinancials
+    ? periodFinancials.totals.margin
+    : periodProfitTotal
+
+  const fiadoPickerFiltered = useMemo(() => {
+    const q = fiadoCustomerSearch.trim().toLowerCase()
+    if (!q) return posCustomers
+    return posCustomers.filter(
+      (c) =>
+        c.fullName.toLowerCase().includes(q) ||
+        (c.phone && c.phone.toLowerCase().includes(q)) ||
+        (c.email || "").toLowerCase().includes(q),
+    )
+  }, [posCustomers, fiadoCustomerSearch])
+
+  const fiadoSelectedLabel = useMemo(() => {
+    if (!posFiadoCustomerId) return "Seleccionar cliente para fiado"
+    const c = posCustomers.find((x) => String(x.id) === posFiadoCustomerId)
+    return c?.fullName ?? "Cliente"
+  }, [posFiadoCustomerId, posCustomers])
 
   const historyPeriodCaption = formatSalesHistoryPeriodCaption(
     historyViewPeriod,
@@ -714,21 +762,18 @@ export function Ventas() {
         {posPaymentMethod === "fiado" ? (
           <div className="space-y-2">
             <Label className="text-xs text-muted-foreground">Cliente</Label>
-            <Select
-              value={posFiadoCustomerId || undefined}
-              onValueChange={(v) => setPosFiadoCustomerId(v)}
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 w-full justify-between gap-2 px-3 font-normal"
+              onClick={() => {
+                setFiadoCustomerSearch("")
+                setFiadoPickerOpen(true)
+              }}
             >
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder="Selecciona cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {posCustomers.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>
-                    {c.fullName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <span className="min-w-0 truncate text-left">{fiadoSelectedLabel}</span>
+              <Users className="h-4 w-4 shrink-0 opacity-70" />
+            </Button>
             {posCustomers.length === 0 ? (
               <p className="text-xs text-amber-600 dark:text-amber-400">
                 No hay clientes en el directorio. Créalos en el módulo Clientes.
@@ -1067,7 +1112,7 @@ export function Ventas() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 sm:gap-4">
             <Card className="shadow-sm">
               <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
@@ -1075,7 +1120,7 @@ export function Ventas() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    Ventas (periodo)
+                    Mov. ventas (periodo)
                   </p>
                   <p className="text-lg font-bold sm:text-2xl">{visibleSales.length}</p>
                 </div>
@@ -1088,10 +1133,31 @@ export function Ventas() {
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    Total cobrado (periodo)
+                    Ingreso total (periodo)
                   </p>
                   <p className="text-lg font-bold text-primary sm:text-2xl">
-                    {formatQ(periodRevenueTotal)}
+                    {formatQ(periodIngresoTotal)}
+                  </p>
+                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-xs">
+                    Ventas cobradas + abonos del periodo
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="shadow-sm">
+              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted sm:h-12 sm:w-12">
+                  <Package className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                    Capital / costo (periodo)
+                  </p>
+                  <p className="text-lg font-bold text-foreground sm:text-2xl">
+                    {formatQ(periodCapitalTotal)}
+                  </p>
+                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-xs">
+                    Costo inventario (contado + parte de abonos FIFO)
                   </p>
                 </div>
               </CardContent>
@@ -1106,7 +1172,10 @@ export function Ventas() {
                     Ganancia (periodo)
                   </p>
                   <p className="text-lg font-bold text-emerald-600 sm:text-2xl">
-                    {formatQ(periodProfitTotal)}
+                    {formatQ(periodGananciaTotal)}
+                  </p>
+                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-xs">
+                    Margen ventas cobradas + margen en abonos (FIFO)
                   </p>
                 </div>
               </CardContent>
@@ -1126,7 +1195,7 @@ export function Ventas() {
                 </div>
               </CardContent>
             </Card>
-            <Card className="col-span-2 shadow-sm sm:col-span-1 lg:col-span-1">
+            <Card className="shadow-sm">
               <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30 sm:h-12 sm:w-12">
                   <Coins className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
@@ -1140,6 +1209,12 @@ export function Ventas() {
               </CardContent>
             </Card>
           </div>
+          {historyLoadState === "ready" && !periodFinancials ? (
+            <p className="text-xs text-muted-foreground">
+              El desglose con abonos (FIFO) no está disponible; los totales del periodo suman abonos
+              localmente sin reparto contra facturas al fiado.
+            </p>
+          ) : null}
 
           <Card className="shadow-sm">
             <CardHeader className="space-y-3 pb-3">
@@ -1241,10 +1316,12 @@ export function Ventas() {
                             </Badge>
                           </div>
                           <p className="line-clamp-2 text-xs text-muted-foreground sm:text-sm">
-                            {row.abono.note
-                              ? row.abono.note
-                              : `Abono registrado · ${formatDateTime(row.abono.timestamp)}`}
-                            {row.abono.note ? ` · ${formatDateTime(row.abono.timestamp)}` : ""}
+                            Cobro a cuenta (abono) · suma al ingreso del día y se reparte FIFO contra
+                            facturas al fiado (capital y ganancia en Balance).
+                            {row.abono.note ? ` · ${row.abono.note}` : ""}
+                            <span className="block text-[11px] opacity-90">
+                              {formatDateTime(row.abono.timestamp)}
+                            </span>
                           </p>
                         </div>
                         <p className="shrink-0 text-base font-bold text-emerald-600 sm:text-lg">
@@ -1279,40 +1356,190 @@ export function Ventas() {
       </Tabs>
 
       <Dialog open={showBalanceOpen} onOpenChange={setShowBalanceOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Balance</DialogTitle>
             <DialogDescription>
-              Resumen del periodo del historial. Solo entran ventas cobradas (efectivo y tarjeta): los
-              fiados no suman a ingresos ni ganancia hasta que el cliente pague (abono).
+              Ingreso del periodo = ventas cobradas (efectivo/tarjeta) más abonos registrados en las
+              mismas fechas. Los abonos se reparten en orden FIFO contra facturas al fiado para separar
+              capital (costo de mercancía) y ganancia.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-4 py-2">
             <p className="text-sm font-medium text-foreground">{historyPeriodCaption}</p>
-            <div className="space-y-3 rounded-lg border p-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Ventas cobradas</span>
-                <span className="font-medium tabular-nums">{visibleSalesPaid.length}</span>
+            {periodFinancials ? (
+              <>
+                <div className="space-y-2 rounded-lg border p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Ventas cobradas (efectivo / tarjeta)
+                  </p>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Cantidad</span>
+                    <span className="font-medium tabular-nums">
+                      {periodFinancials.paidSales.count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ingreso</span>
+                    <span className="font-medium tabular-nums">
+                      {formatQ(periodFinancials.paidSales.revenue)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Capital (costo)</span>
+                    <span className="font-medium tabular-nums">
+                      {formatQ(periodFinancials.paidSales.cost)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ganancia</span>
+                    <span className="font-medium tabular-nums text-emerald-600">
+                      {formatQ(periodFinancials.paidSales.margin)}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
+                    Abonos del periodo (cobro a cuenta)
+                  </p>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Pagos registrados</span>
+                    <span className="font-medium tabular-nums">
+                      {periodFinancials.abonosInPeriod.count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Efectivo cobrado</span>
+                    <span className="font-medium tabular-nums">
+                      {formatQ(periodFinancials.abonosInPeriod.cash)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Capital recuperado</span>
+                    <span className="font-medium tabular-nums">
+                      {formatQ(periodFinancials.abonosInPeriod.costRecovery)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ganancia recuperada</span>
+                    <span className="font-medium tabular-nums text-emerald-600">
+                      {formatQ(periodFinancials.abonosInPeriod.marginRecovery)}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Total periodo (ventas cobradas + abonos)
+                  </p>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ingreso total</span>
+                    <span className="font-semibold tabular-nums">
+                      {formatQ(periodFinancials.totals.revenue)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Capital total</span>
+                    <span className="font-semibold tabular-nums">
+                      {formatQ(periodFinancials.totals.cost)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 text-base font-semibold">
+                    <span>Ganancia total</span>
+                    <span className="text-emerald-600 tabular-nums">
+                      {formatQ(periodFinancials.totals.margin)}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3 rounded-lg border p-4">
+                <p className="text-sm text-muted-foreground">
+                  No se pudo cargar el desglose con abonos. Mostrando solo ventas cobradas del periodo
+                  (sin reparto FIFO de abonos).
+                </p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Ventas cobradas</span>
+                  <span className="font-medium tabular-nums">{visibleSalesPaid.length}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Ingresos</span>
+                  <span className="font-medium tabular-nums">
+                    {formatQ(balanceTotals.totalRevenue)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Precio costo total</span>
+                  <span className="font-medium tabular-nums">
+                    {formatQ(balanceTotals.totalCost)}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t pt-3 text-base font-semibold">
+                  <span>Ganancia generada</span>
+                  <span className="text-emerald-600 tabular-nums">
+                    {formatQ(balanceTotals.totalMargin)}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Ingresos</span>
-                <span className="font-medium tabular-nums">
-                  {formatQ(balanceTotals.totalRevenue)}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Precio costo total</span>
-                <span className="font-medium tabular-nums">
-                  {formatQ(balanceTotals.totalCost)}
-                </span>
-              </div>
-              <div className="flex justify-between border-t pt-3 text-base font-semibold">
-                <span>Ganancia generada</span>
-                <span className="text-emerald-600 tabular-nums">
-                  {formatQ(balanceTotals.totalMargin)}
-                </span>
-              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={fiadoPickerOpen}
+        onOpenChange={(open) => {
+          setFiadoPickerOpen(open)
+          if (!open) setFiadoCustomerSearch("")
+        }}
+      >
+        <DialogContent className="flex max-h-[min(90vh,520px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+          <DialogHeader className="shrink-0 border-b px-6 pb-3 pt-6">
+            <DialogTitle>Cliente para fiado</DialogTitle>
+            <DialogDescription>
+              Busca por nombre, teléfono o correo y toca un cliente para asignar el crédito.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex min-h-0 flex-1 flex-col gap-3 px-6 py-4">
+            <div className="relative shrink-0">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={fiadoCustomerSearch}
+                onChange={(e) => setFiadoCustomerSearch(e.target.value)}
+                placeholder="Buscar cliente…"
+                className="h-10 pl-9"
+                autoFocus
+              />
             </div>
+            <ScrollArea className="h-[min(22rem,48vh)] rounded-md border sm:h-[min(24rem,50vh)]">
+              <div className="divide-y p-1">
+                {fiadoPickerFiltered.length === 0 ? (
+                  <p className="p-6 text-center text-sm text-muted-foreground">
+                    {posCustomers.length === 0
+                      ? "No hay clientes. Créalos en el módulo Clientes."
+                      : "Ningún cliente coincide con la búsqueda."}
+                  </p>
+                ) : (
+                  fiadoPickerFiltered.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      className="flex w-full flex-col items-start gap-0.5 rounded-md px-3 py-3 text-left text-sm transition-colors hover:bg-muted"
+                      onClick={() => {
+                        setPosFiadoCustomerId(String(c.id))
+                        setFiadoPickerOpen(false)
+                        setFiadoCustomerSearch("")
+                      }}
+                    >
+                      <span className="font-medium">{c.fullName}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {c.phone}
+                        {c.email ? ` · ${c.email}` : ""}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
           </div>
         </DialogContent>
       </Dialog>

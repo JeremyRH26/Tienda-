@@ -572,31 +572,6 @@ export function Clientes() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                <p className="mb-2 text-sm text-muted-foreground">
-                  Eliminar del directorio solo si el saldo deudor es cero. Las ventas antiguas pueden quedar sin cliente vinculado según la base de datos.
-                </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 border-destructive/50 text-destructive hover:bg-destructive/10"
-                  disabled={selectedCustomer.balance > 0}
-                  onClick={() => {
-                    if (selectedCustomer.balance > 0) {
-                      toast.error(
-                        "Liquide el saldo con abonos antes de eliminar al cliente.",
-                      )
-                      return
-                    }
-                    setCustomerPendingDelete(selectedCustomer)
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Eliminar cliente
-                </Button>
-              </div>
-
               {selectedCustomer.balance > 0 && selectedCustomer.pendingCreditLines.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

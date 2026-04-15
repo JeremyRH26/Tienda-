@@ -82,6 +82,47 @@ export function mapApiAbonoToEntry(a: AbonoDto): AbonoEntry {
   }
 }
 
+export type PeriodFinancialBreakdownDto = {
+  dateStart: string
+  dateEnd: string
+  paidSales: {
+    count: number
+    revenue: number
+    cost: number
+    margin: number
+  }
+  abonosInPeriod: {
+    count: number
+    cash: number
+    costRecovery: number
+    marginRecovery: number
+  }
+  totals: {
+    revenue: number
+    cost: number
+    margin: number
+  }
+}
+
+export async function fetchPeriodFinancialBreakdown(
+  dateStart: string,
+  dateEnd: string,
+): Promise<PeriodFinancialBreakdownDto> {
+  const qs = new URLSearchParams({ dateStart, dateEnd })
+  const res = await fetch(`${API_BASE}/sales/period-financials?${qs.toString()}`)
+  const json = (await res.json()) as {
+    message?: string
+    data?: PeriodFinancialBreakdownDto
+  }
+  if (!res.ok) {
+    throw new Error(json.message ?? "No se pudo cargar el desglose del periodo.")
+  }
+  if (!json.data) {
+    throw new Error("Respuesta inválida del servidor.")
+  }
+  return json.data
+}
+
 export async function fetchSalesHistory(
   dateStart: string,
   dateEnd: string,
