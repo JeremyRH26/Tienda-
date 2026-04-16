@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Search,
   Plus,
@@ -13,7 +15,13 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react"
-import { mockSuppliers, type SupplierContact } from "@/lib/mock-data"
+import {
+  createSupplier,
+  deleteSupplier,
+  fetchSuppliers,
+  updateSupplier,
+  type SupplierDto,
+} from "@/lib/services/suppliers.service"
 import {
   Dialog,
   DialogContent,
@@ -33,93 +41,139 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
-type Supplier = SupplierContact
+function dash(s: string): string {
+  const t = s.trim()
+  return t ? t : "—"
+}
 
 export function Proveedores() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(() =>
-    mockSuppliers.map((s) => ({ ...s }))
-  )
+  const [suppliers, setSuppliers] = useState<SupplierDto[]>([])
+  const [listLoading, setListLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddSupplier, setShowAddSupplier] = useState(false)
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null)
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
-  const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(null)
+  const [selectedSupplier, setSelectedSupplier] = useState<SupplierDto | null>(null)
+  const [editingSupplier, setEditingSupplier] = useState<SupplierDto | null>(null)
+  const [deletingSupplier, setDeletingSupplier] = useState<SupplierDto | null>(null)
+  const [saving, setSaving] = useState(false)
   const [editSupplierForm, setEditSupplierForm] = useState({
-    name: "",
-    contact: "",
+    companyName: "",
+    contactName: "",
     phone: "",
     email: "",
   })
   const [newSupplier, setNewSupplier] = useState({
-    name: "",
-    contact: "",
+    companyName: "",
+    contactName: "",
     phone: "",
     email: "",
   })
 
-  const filteredSuppliers = suppliers.filter(
-    (supplier) =>
-      supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.contact.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supplier.phone.includes(searchTerm) ||
-      supplier.email.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const loadSuppliers = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent)
+    if (!silent) {
+      setListLoading(true)
+    }
+    try {
+      const rows = await fetchSuppliers()
+      setSuppliers(rows)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error al cargar proveedores")
+      setSuppliers([])
+    } finally {
+      if (!silent) {
+        setListLoading(false)
+      }
+    }
+  }, [])
 
-  const handleAddSupplier = () => {
-    if (!newSupplier.name.trim()) return
-    const nextId = suppliers.length ? Math.max(...suppliers.map((s) => s.id)) + 1 : 1
-    setSuppliers((prev) => [
-      ...prev,
-      {
-        id: nextId,
-        name: newSupplier.name.trim(),
-        contact: newSupplier.contact.trim() || "-",
-        phone: newSupplier.phone.trim() || "-",
-        email: newSupplier.email.trim() || "-",
-      },
-    ])
-    setShowAddSupplier(false)
-    setNewSupplier({ name: "", contact: "", phone: "", email: "" })
+  useEffect(() => {
+    void loadSuppliers()
+  }, [loadSuppliers])
+
+  const filteredSuppliers = suppliers.filter((supplier) => {
+    const q = searchTerm.toLowerCase()
+    return (
+      supplier.companyName.toLowerCase().includes(q) ||
+      supplier.contactName.toLowerCase().includes(q) ||
+      supplier.phone.toLowerCase().includes(q) ||
+      supplier.email.toLowerCase().includes(q)
+    )
+  })
+
+  const handleAddSupplier = async () => {
+    if (!newSupplier.companyName.trim()) {
+      toast.error("Indica el nombre o empresa del proveedor")
+      return
+    }
+    setSaving(true)
+    try {
+      await createSupplier({
+        companyName: newSupplier.companyName,
+        contactName: newSupplier.contactName,
+        phone: newSupplier.phone,
+        email: newSupplier.email,
+      })
+      toast.success("Proveedor registrado")
+      setShowAddSupplier(false)
+      setNewSupplier({ companyName: "", contactName: "", phone: "", email: "" })
+      await loadSuppliers({ silent: true })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar")
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const openSupplierEdit = (s: Supplier) => {
+  const openSupplierEdit = (s: SupplierDto) => {
     setEditingSupplier(s)
     setEditSupplierForm({
-      name: s.name,
-      contact: s.contact,
+      companyName: s.companyName,
+      contactName: s.contactName,
       phone: s.phone,
       email: s.email,
     })
   }
 
-  const saveSupplierEdit = () => {
+  const saveSupplierEdit = async () => {
     if (!editingSupplier) return
-    const id = editingSupplier.id
-    setSuppliers((prev) =>
-      prev.map((s) =>
-        s.id === id
-          ? {
-              ...s,
-              name: editSupplierForm.name.trim() || s.name,
-              contact: editSupplierForm.contact.trim() || s.contact,
-              phone: editSupplierForm.phone.trim() || s.phone,
-              email: editSupplierForm.email.trim() || s.email,
-            }
-          : s
-      )
-    )
-    setSelectedSupplier((cur) =>
-      cur?.id === id
-        ? {
-            ...cur,
-            name: editSupplierForm.name.trim() || cur.name,
-            contact: editSupplierForm.contact.trim() || cur.contact,
-            phone: editSupplierForm.phone.trim() || cur.phone,
-            email: editSupplierForm.email.trim() || cur.email,
-          }
-        : cur
-    )
-    setEditingSupplier(null)
+    if (!editSupplierForm.companyName.trim()) {
+      toast.error("Indica el nombre o empresa del proveedor")
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateSupplier(editingSupplier.id, {
+        companyName: editSupplierForm.companyName,
+        contactName: editSupplierForm.contactName,
+        phone: editSupplierForm.phone,
+        email: editSupplierForm.email,
+      })
+      toast.success("Proveedor actualizado")
+      setEditingSupplier(null)
+      await loadSuppliers({ silent: true })
+      setSelectedSupplier((cur) => (cur?.id === updated.id ? updated : cur))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo actualizar")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!deletingSupplier) return
+    setSaving(true)
+    try {
+      await deleteSupplier(deletingSupplier.id)
+      toast.success("Proveedor eliminado")
+      const id = deletingSupplier.id
+      setDeletingSupplier(null)
+      setSelectedSupplier((cur) => (cur?.id === id ? null : cur))
+      await loadSuppliers({ silent: true })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo eliminar")
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -133,7 +187,7 @@ export function Proveedores() {
         </div>
         <Dialog open={showAddSupplier} onOpenChange={setShowAddSupplier}>
           <DialogTrigger asChild>
-            <Button className="h-11 gap-2 sm:h-12 sm:px-6">
+            <Button className="h-11 gap-2 sm:h-12 sm:px-6" disabled={listLoading}>
               <Plus className="h-4 w-4" />
               <span>Nuevo Proveedor</span>
             </Button>
@@ -147,9 +201,9 @@ export function Proveedores() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Nombre o empresa</label>
                 <Input
-                  value={newSupplier.name}
+                  value={newSupplier.companyName}
                   onChange={(e) =>
-                    setNewSupplier({ ...newSupplier, name: e.target.value })
+                    setNewSupplier({ ...newSupplier, companyName: e.target.value })
                   }
                   className="h-12"
                   placeholder="Nombre del proveedor"
@@ -158,9 +212,9 @@ export function Proveedores() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Contacto</label>
                 <Input
-                  value={newSupplier.contact}
+                  value={newSupplier.contactName}
                   onChange={(e) =>
-                    setNewSupplier({ ...newSupplier, contact: e.target.value })
+                    setNewSupplier({ ...newSupplier, contactName: e.target.value })
                   }
                   className="h-12"
                   placeholder="Persona de contacto"
@@ -189,8 +243,8 @@ export function Proveedores() {
                   placeholder="proveedor@email.com"
                 />
               </div>
-              <Button className="mt-2 h-12 w-full" onClick={handleAddSupplier}>
-                Guardar
+              <Button className="mt-2 h-12 w-full" onClick={() => void handleAddSupplier()} disabled={saving}>
+                {saving ? <Spinner className="mx-auto" /> : "Guardar"}
               </Button>
             </div>
           </DialogContent>
@@ -204,7 +258,9 @@ export function Proveedores() {
           </div>
           <div className="min-w-0">
             <p className="truncate text-xs text-muted-foreground sm:text-sm">Total de proveedores</p>
-            <p className="text-lg font-bold sm:text-2xl">{suppliers.length}</p>
+            <p className="text-lg font-bold sm:text-2xl">
+              {listLoading ? "…" : suppliers.length}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -216,69 +272,76 @@ export function Proveedores() {
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="h-11 pl-10 sm:h-12"
+          disabled={listLoading}
         />
       </div>
 
-      <div className="space-y-3 sm:space-y-4">
-        {filteredSuppliers.map((supplier) => (
-          <Card
-            key={supplier.id}
-            className="relative cursor-pointer shadow-sm transition-all hover:shadow-md"
-            onClick={() => setSelectedSupplier(supplier)}
-          >
-            <CardContent className="p-6">
-              <div
-                className="absolute right-3 top-3 flex gap-0.5"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  aria-label="Editar proveedor"
-                  onClick={() => openSupplierEdit(supplier)}
+      {listLoading ? (
+        <div className="flex justify-center py-12">
+          <Spinner className="h-8 w-8 text-muted-foreground" />
+        </div>
+      ) : (
+        <div className="space-y-3 sm:space-y-4">
+          {filteredSuppliers.map((supplier) => (
+            <Card
+              key={supplier.id}
+              className="relative cursor-pointer shadow-sm transition-all hover:shadow-md"
+              onClick={() => setSelectedSupplier(supplier)}
+            >
+              <CardContent className="p-6">
+                <div
+                  className="absolute right-3 top-3 flex gap-0.5"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  aria-label="Eliminar proveedor"
-                  onClick={() => setDeletingSupplier(supplier)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex flex-col gap-4 pr-14 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                    <Truck className="h-6 w-6 text-primary" />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label="Editar proveedor"
+                    onClick={() => openSupplierEdit(supplier)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    aria-label="Eliminar proveedor"
+                    onClick={() => setDeletingSupplier(supplier)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-4 pr-14 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                      <Truck className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{dash(supplier.companyName)}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Contacto: {dash(supplier.contactName)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold">{supplier.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Contacto: {supplier.contact}
-                    </p>
+                  <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 shrink-0" />
+                      <span>{dash(supplier.phone)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{dash(supplier.email)}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 shrink-0" />
-                    <span>{supplier.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{supplier.email}</span>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <Dialog
         open={selectedSupplier !== null}
@@ -296,20 +359,20 @@ export function Proveedores() {
                   <Truck className="h-8 w-8 text-primary" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold">{selectedSupplier.name}</h2>
+                  <h2 className="text-xl font-bold">{dash(selectedSupplier.companyName)}</h2>
                   <p className="text-muted-foreground">
-                    Contacto: {selectedSupplier.contact}
+                    Contacto: {dash(selectedSupplier.contactName)}
                   </p>
                 </div>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{selectedSupplier.phone}</span>
+                  <span>{dash(selectedSupplier.phone)}</span>
                 </div>
                 <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{selectedSupplier.email}</span>
+                  <span>{dash(selectedSupplier.email)}</span>
                 </div>
               </div>
             </div>
@@ -327,16 +390,20 @@ export function Proveedores() {
             <div className="space-y-2">
               <label className="text-sm font-medium">Nombre o empresa</label>
               <Input
-                value={editSupplierForm.name}
-                onChange={(e) => setEditSupplierForm({ ...editSupplierForm, name: e.target.value })}
+                value={editSupplierForm.companyName}
+                onChange={(e) =>
+                  setEditSupplierForm({ ...editSupplierForm, companyName: e.target.value })
+                }
                 className="h-12"
               />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Contacto</label>
               <Input
-                value={editSupplierForm.contact}
-                onChange={(e) => setEditSupplierForm({ ...editSupplierForm, contact: e.target.value })}
+                value={editSupplierForm.contactName}
+                onChange={(e) =>
+                  setEditSupplierForm({ ...editSupplierForm, contactName: e.target.value })
+                }
                 className="h-12"
               />
             </div>
@@ -344,7 +411,9 @@ export function Proveedores() {
               <label className="text-sm font-medium">Teléfono</label>
               <Input
                 value={editSupplierForm.phone}
-                onChange={(e) => setEditSupplierForm({ ...editSupplierForm, phone: e.target.value })}
+                onChange={(e) =>
+                  setEditSupplierForm({ ...editSupplierForm, phone: e.target.value })
+                }
                 className="h-12"
               />
             </div>
@@ -353,12 +422,14 @@ export function Proveedores() {
               <Input
                 type="email"
                 value={editSupplierForm.email}
-                onChange={(e) => setEditSupplierForm({ ...editSupplierForm, email: e.target.value })}
+                onChange={(e) =>
+                  setEditSupplierForm({ ...editSupplierForm, email: e.target.value })
+                }
                 className="h-12"
               />
             </div>
-            <Button className="h-12 w-full" onClick={saveSupplierEdit}>
-              Guardar
+            <Button className="h-12 w-full" onClick={() => void saveSupplierEdit()} disabled={saving}>
+              {saving ? <Spinner className="mx-auto" /> : "Guardar"}
             </Button>
           </div>
         </DialogContent>
@@ -369,23 +440,20 @@ export function Proveedores() {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar proveedor?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará {deletingSupplier?.name} de la lista.
+              Se eliminará {deletingSupplier ? dash(deletingSupplier.companyName) : ""} de la base de datos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (deletingSupplier) {
-                  const id = deletingSupplier.id
-                  setSuppliers((prev) => prev.filter((s) => s.id !== id))
-                  setSelectedSupplier((cur) => (cur?.id === id ? null : cur))
-                }
-                setDeletingSupplier(null)
+              disabled={saving}
+              onClick={(e) => {
+                e.preventDefault()
+                void confirmDelete()
               }}
             >
-              Eliminar
+              {saving ? <Spinner className="mx-auto size-4" /> : "Eliminar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
