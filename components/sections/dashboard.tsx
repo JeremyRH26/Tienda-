@@ -283,7 +283,7 @@ export function Dashboard() {
               <div className="text-lg font-bold text-primary sm:text-2xl">{formatQ(balance)}</div>
               <p className="text-xs text-muted-foreground">
                 <span className="hidden sm:inline">
-                  Ventas de la semana (BD) − gastos del mes en curso
+                  Ventas de la semana - Gastos del mes
                 </span>
                 <span className="sm:hidden">Ventas semana − gastos mes</span>
               </p>
@@ -306,7 +306,7 @@ export function Dashboard() {
                 ventas a fiado
               </p>
               <p className="mt-1 text-[10px] leading-tight text-muted-foreground sm:text-xs">
-                Suma de ventas en fiado en BD (sin descontar abonos si aún no están enlazados).
+                Suma de ventas en fiado
               </p>
             </CardContent>
           </Card>
