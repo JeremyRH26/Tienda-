@@ -59,6 +59,39 @@ export function salesPeriodLabel(period: SalesPrintPeriod): string {
 }
 
 /** Texto descriptivo del rango visible (para historial / balance). */
+/** Fecha local en formato YYYY-MM-DD (para consultas a la API). */
+export function toSqlDateString(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
+}
+
+/** Rango inclusive de fechas según el periodo del historial de ventas. */
+export function getSalesApiDateRange(
+  period: SalesPrintPeriod,
+  ref: Date
+): { dateStart: string; dateEnd: string } {
+  const r = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate())
+  if (period === "day") {
+    const s = toSqlDateString(r)
+    return { dateStart: s, dateEnd: s }
+  }
+  if (period === "week") {
+    const a = startOfWeekMonday(ref)
+    const b = endOfWeekSunday(ref)
+    return { dateStart: toSqlDateString(a), dateEnd: toSqlDateString(b) }
+  }
+  if (period === "month") {
+    const start = new Date(ref.getFullYear(), ref.getMonth(), 1)
+    const end = new Date(ref.getFullYear(), ref.getMonth() + 1, 0)
+    return { dateStart: toSqlDateString(start), dateEnd: toSqlDateString(end) }
+  }
+  const start = new Date(ref.getFullYear(), 0, 1)
+  const end = new Date(ref.getFullYear(), 11, 31)
+  return { dateStart: toSqlDateString(start), dateEnd: toSqlDateString(end) }
+}
+
 export function formatSalesHistoryPeriodCaption(
   period: SalesPrintPeriod,
   ref: Date

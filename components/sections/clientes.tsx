@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,12 +14,22 @@ import {
   Mail,
   ShoppingBag,
   Pencil,
-  Trash2,
   ScrollText,
   FileDown,
   MessageCircle,
+  Trash2,
 } from "lucide-react"
-import { mockCustomers, type ShopCustomer, type PendingCreditLine } from "@/lib/mock-data"
+import type { ShopCustomer, PendingCreditLine } from "@/lib/mock-data"
+import {
+  createCustomerAbonoApi,
+  createCustomerApi,
+  deleteCustomerApi,
+  fetchCustomerCreditSales,
+  fetchCustomersWithBalance,
+  mapCreditSalesToPendingLines,
+  mapCustomerDtoToShopCustomer,
+  updateCustomerApi,
+} from "@/lib/services/customers.service"
 import { formatQ } from "@/lib/currency"
 import { useBusiness } from "@/lib/business-context"
 import { downloadCustomerCreditPdf } from "@/lib/pdf-reports"
@@ -44,24 +55,6 @@ import {
 
 type Customer = ShopCustomer
 
-function applyAbonoToCreditLines(
-  lines: PendingCreditLine[],
-  amount: number
-): PendingCreditLine[] {
-  let remaining = amount
-  const next = lines.map((line) => ({
-    ...line,
-    items: line.items.map((i) => ({ ...i })),
-  }))
-  for (const line of next) {
-    if (remaining <= 0) break
-    const pay = Math.min(line.saldoPendiente, remaining)
-    line.saldoPendiente = Math.round((line.saldoPendiente - pay) * 100) / 100
-    remaining -= pay
-  }
-  return next.filter((l) => l.saldoPendiente > 0.009)
-}
-
 function IconoQuetzal({ className }: { className?: string }) {
   return (
     <span
@@ -75,12 +68,11 @@ function IconoQuetzal({ className }: { className?: string }) {
 
 export function Clientes() {
   const { registerAbono } = useBusiness()
-  const [customers, setCustomers] = useState<Customer[]>(() =>
-    mockCustomers.map((c) => ({
-      ...c,
-      pendingCreditLines: c.pendingCreditLines.map((l) => ({ ...l })),
-    }))
-  )
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [customersLoadState, setCustomersLoadState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle")
+  const [customersError, setCustomersError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -88,13 +80,59 @@ export function Clientes() {
   const [paymentAmount, setPaymentAmount] = useState("")
   const [paymentNote, setPaymentNote] = useState("")
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null)
-  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null)
   const [editForm, setEditForm] = useState({ name: "", phone: "", email: "" })
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     phone: "",
     email: "",
   })
+  const [savingCustomer, setSavingCustomer] = useState(false)
+  const [customerPendingDelete, setCustomerPendingDelete] = useState<Customer | null>(
+    null,
+  )
+  const [deleteCustomerInFlight, setDeleteCustomerInFlight] = useState(false)
+
+  const refreshCustomers = useCallback(async () => {
+    setCustomersLoadState("loading")
+    setCustomersError(null)
+    try {
+      const rows = await fetchCustomersWithBalance()
+      setCustomers(rows.map((c) => mapCustomerDtoToShopCustomer(c, [])))
+      setCustomersLoadState("ready")
+    } catch (e) {
+      setCustomersLoadState("error")
+      setCustomersError(
+        e instanceof Error ? e.message : "No se pudieron cargar los clientes.",
+      )
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshCustomers()
+  }, [refreshCustomers])
+
+  useEffect(() => {
+    if (!selectedCustomer || showPayment) return
+    const id = selectedCustomer.id
+    let cancelled = false
+    void fetchCustomerCreditSales(id)
+      .then((credit) => {
+        if (cancelled) return
+        const lines = mapCreditSalesToPendingLines(credit)
+        setSelectedCustomer((prev) =>
+          prev && prev.id === id ? { ...prev, pendingCreditLines: lines } : prev,
+        )
+        setCustomers((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, pendingCreditLines: lines } : c)),
+        )
+      })
+      .catch(() => {
+        if (cancelled) return
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedCustomer?.id, showPayment])
 
   const filteredCustomers = customers.filter(
     (customer) =>
@@ -105,25 +143,29 @@ export function Clientes() {
 
   const totalDebt = customers.reduce((acc, c) => acc + c.balance, 0)
   const customersWithDebt = customers.filter((c) => c.balance > 0).length
+  const initialLoading = customersLoadState === "loading" && customers.length === 0
 
-  const handleAddCustomer = () => {
-    if (!newCustomer.name.trim()) return
-    const nextId = customers.length ? Math.max(...customers.map((c) => c.id)) + 1 : 1
-    setCustomers((prev) => [
-      ...prev,
-      {
-        id: nextId,
-        name: newCustomer.name.trim(),
-        phone: newCustomer.phone.trim() || "-",
-        email: newCustomer.email.trim() || "-",
-        balance: 0,
-        lastPurchase: "-",
-        totalPurchases: 0,
-        pendingCreditLines: [],
-      },
-    ])
-    setShowAddCustomer(false)
-    setNewCustomer({ name: "", phone: "", email: "" })
+  const handleAddCustomer = async () => {
+    if (!newCustomer.name.trim() || !newCustomer.phone.trim()) {
+      toast.error("Nombre y teléfono son obligatorios.")
+      return
+    }
+    setSavingCustomer(true)
+    try {
+      await createCustomerApi({
+        fullName: newCustomer.name.trim(),
+        phone: newCustomer.phone.trim(),
+        email: newCustomer.email.trim(),
+      })
+      toast.success("Cliente creado.")
+      setShowAddCustomer(false)
+      setNewCustomer({ name: "", phone: "", email: "" })
+      await refreshCustomers()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo crear el cliente.")
+    } finally {
+      setSavingCustomer(false)
+    }
   }
 
   const openEdit = (c: Customer) => {
@@ -131,75 +173,91 @@ export function Clientes() {
     setEditForm({ name: c.name, phone: c.phone, email: c.email })
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingCustomer) return
     const id = editingCustomer.id
-    setCustomers((prev) =>
-      prev.map((c) =>
-        c.id === id
+    setSavingCustomer(true)
+    try {
+      await updateCustomerApi(id, {
+        fullName: editForm.name.trim(),
+        phone: editForm.phone.trim(),
+        email: editForm.email.trim(),
+      })
+      toast.success("Cliente actualizado.")
+      setEditingCustomer(null)
+      await refreshCustomers()
+      setSelectedCustomer((cur) =>
+        cur?.id === id
           ? {
-              ...c,
-              name: editForm.name.trim() || c.name,
-              phone: editForm.phone.trim() || c.phone,
-              email: editForm.email.trim() || c.email,
-              pendingCreditLines: c.pendingCreditLines.map((l) => ({ ...l })),
+              ...cur,
+              name: editForm.name.trim() || cur.name,
+              phone: editForm.phone.trim() || cur.phone,
+              email: editForm.email.trim() || cur.email,
             }
-          : c
+          : cur,
       )
-    )
-    setSelectedCustomer((cur) =>
-      cur?.id === id
-        ? {
-            ...cur,
-            name: editForm.name.trim() || cur.name,
-            phone: editForm.phone.trim() || cur.phone,
-            email: editForm.email.trim() || cur.email,
-          }
-        : cur
-    )
-    setEditingCustomer(null)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar el cliente.")
+    } finally {
+      setSavingCustomer(false)
+    }
   }
 
-  const handlePayment = () => {
+  const handlePayment = async () => {
     if (!selectedCustomer) return
     const raw = paymentAmount.replace(",", ".").trim()
     const amount = parseFloat(raw)
-    if (!Number.isFinite(amount) || amount <= 0) return
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Indica un monto válido.")
+      return
+    }
 
     const id = selectedCustomer.id
     const applied = Math.min(amount, selectedCustomer.balance)
     if (applied <= 0) return
 
-    const hasLines = selectedCustomer.pendingCreditLines.length > 0
-    const newLines = hasLines
-      ? applyAbonoToCreditLines(selectedCustomer.pendingCreditLines, applied)
-      : []
-    const newBalance = hasLines
-      ? newLines.reduce((acc, l) => acc + l.saldoPendiente, 0)
-      : Math.max(0, selectedCustomer.balance - applied)
-
-    setCustomers((prev) =>
-      prev.map((c) => {
-        if (c.id !== id) return c
-        return {
-          ...c,
-          pendingCreditLines: hasLines ? newLines : c.pendingCreditLines,
-          balance: newBalance,
-        }
+    setSavingCustomer(true)
+    try {
+      const { customerAccountId } = await createCustomerAbonoApi(id, {
+        amount: applied,
+        note: paymentNote,
       })
-    )
+      registerAbono({
+        id: String(customerAccountId),
+        customerId: id,
+        customerName: selectedCustomer.name,
+        amount: applied,
+        note: paymentNote,
+      })
+      toast.success("Abono registrado correctamente.")
+      setShowPayment(false)
+      setPaymentAmount("")
+      setPaymentNote("")
+      setSelectedCustomer(null)
+      await refreshCustomers()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo registrar el abono.")
+    } finally {
+      setSavingCustomer(false)
+    }
+  }
 
-    registerAbono({
-      customerId: id,
-      customerName: selectedCustomer.name,
-      amount: applied,
-      note: paymentNote,
-    })
-
-    setShowPayment(false)
-    setPaymentAmount("")
-    setPaymentNote("")
-    setSelectedCustomer(null)
+  const handleConfirmDeleteCustomer = async () => {
+    if (!customerPendingDelete) return
+    setDeleteCustomerInFlight(true)
+    try {
+      await deleteCustomerApi(customerPendingDelete.id)
+      toast.success("Cliente eliminado correctamente.")
+      setCustomerPendingDelete(null)
+      setSelectedCustomer(null)
+      await refreshCustomers()
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "No se pudo eliminar el cliente.",
+      )
+    } finally {
+      setDeleteCustomerInFlight(false)
+    }
   }
 
   return (
@@ -208,7 +266,12 @@ export function Clientes() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground sm:text-2xl">Clientes</h1>
-          <p className="text-sm text-muted-foreground sm:text-base">Gestiona tu directorio de clientes y fiados</p>
+          <p className="text-sm text-muted-foreground sm:text-base">
+            Directorio y saldos pendientes de clientes.
+          </p>
+          {customersLoadState === "error" && customersError ? (
+            <p className="mt-2 text-sm text-destructive">{customersError}</p>
+          ) : null}
         </div>
         <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>
           <DialogTrigger asChild>
@@ -220,11 +283,11 @@ export function Clientes() {
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Agregar Nuevo Cliente</DialogTitle>
-              <DialogDescription>Ingresa los datos del nuevo cliente para agregarlo al directorio.</DialogDescription>
+              <DialogDescription>Ingrese los datos del nuevo cliente para agregarlo al directorio.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Nombre Completo</label>
+                <label className="text-sm font-medium">Nombre Completo:</label>
                 <Input
                   value={newCustomer.name}
                   onChange={(e) =>
@@ -235,7 +298,7 @@ export function Clientes() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Teléfono</label>
+                <label className="text-sm font-medium">Teléfono:</label>
                 <Input
                   value={newCustomer.phone}
                   onChange={(e) =>
@@ -246,7 +309,7 @@ export function Clientes() {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Email (opcional)</label>
+                <label className="text-sm font-medium">Correo electrónico: (opcional)</label>
                 <Input
                   type="email"
                   value={newCustomer.email}
@@ -257,14 +320,47 @@ export function Clientes() {
                   placeholder="cliente@email.com"
                 />
               </div>
-              <Button className="mt-2 h-12 w-full" onClick={handleAddCustomer}>
-                Agregar Cliente
+              <Button
+                className="mt-2 h-12 w-full"
+                disabled={savingCustomer}
+                onClick={() => void handleAddCustomer()}
+              >
+                {savingCustomer ? "Guardando…" : "Agregar Cliente"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
+      {initialLoading ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <Card key={`cust-skeleton-stat-${idx}`} className="shadow-sm">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="h-16 animate-pulse rounded-md bg-muted" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="h-11 animate-pulse rounded-md bg-muted sm:h-12" />
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <Card key={`cust-skeleton-card-${idx}`} className="shadow-sm">
+                <CardContent className="p-6">
+                  <div className="h-40 animate-pulse rounded-md bg-muted" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <div
+        className={`space-y-6 transition-all duration-700 ${
+          initialLoading ? "pointer-events-none translate-y-1 opacity-0" : "translate-y-0 opacity-100"
+        }`}
+      >
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <Card className="shadow-sm">
@@ -319,6 +415,9 @@ export function Clientes() {
 
       {/* Customers Grid */}
       <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+        {customersLoadState === "loading" && customers.length === 0 ? (
+          <p className="col-span-full text-sm text-muted-foreground">Cargando clientes…</p>
+        ) : null}
         {filteredCustomers.map((customer) => (
           <Card
             key={customer.id}
@@ -344,9 +443,23 @@ export function Clientes() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
                   aria-label="Eliminar cliente"
-                  onClick={() => setDeletingCustomer(customer)}
+                  title={
+                    customer.balance > 0
+                      ? "Liquide el saldo antes de eliminar"
+                      : "Eliminar cliente"
+                  }
+                  disabled={customer.balance > 0}
+                  onClick={() => {
+                    if (customer.balance > 0) {
+                      toast.error(
+                        "No se puede eliminar mientras tenga saldo deudor. Registre abonos hasta dejar el saldo en cero.",
+                      )
+                      return
+                    }
+                    setCustomerPendingDelete(customer)
+                  }}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -422,6 +535,7 @@ export function Clientes() {
             </CardContent>
           </Card>
         ))}
+      </div>
       </div>
 
       {/* Customer Detail Dialog */}
@@ -680,8 +794,12 @@ export function Clientes() {
                 />
               </div>
 
-              <Button className="h-12 w-full" onClick={handlePayment}>
-                Confirmar Abono
+              <Button
+                className="h-12 w-full"
+                disabled={savingCustomer}
+                onClick={() => void handlePayment()}
+              >
+                {savingCustomer ? "Registrando…" : "Confirmar Abono"}
               </Button>
             </div>
           )}
@@ -720,39 +838,52 @@ export function Clientes() {
                 className="h-12"
               />
             </div>
-            <Button className="h-12 w-full" onClick={saveEdit}>
-              Guardar
+            <Button
+              className="h-12 w-full"
+              disabled={savingCustomer}
+              onClick={() => void saveEdit()}
+            >
+              {savingCustomer ? "Guardando…" : "Guardar"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deletingCustomer !== null} onOpenChange={(open) => !open && setDeletingCustomer(null)}>
-        <AlertDialogContent>
+      <AlertDialog
+        open={customerPendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteCustomerInFlight) setCustomerPendingDelete(null)
+        }}
+      >
+        <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle>
             <AlertDialogDescription>
-              Se eliminará {deletingCustomer?.name} del directorio. Esta acción no se puede deshacer.
+              Se eliminará{" "}
+              <span className="font-medium text-foreground">
+                {customerPendingDelete?.name}
+              </span>{" "}
+              del directorio. Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteCustomerInFlight}>
+              Cancelar
+            </AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                if (deletingCustomer) {
-                  const id = deletingCustomer.id
-                  setCustomers((prev) => prev.filter((c) => c.id !== id))
-                  setSelectedCustomer((cur) => (cur?.id === id ? null : cur))
-                }
-                setDeletingCustomer(null)
+              disabled={deleteCustomerInFlight}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmDeleteCustomer()
               }}
             >
-              Eliminar
+              {deleteCustomerInFlight ? "Eliminando…" : "Eliminar"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   )
 }

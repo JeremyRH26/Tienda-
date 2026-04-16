@@ -351,6 +351,8 @@ export interface SaleRecord {
   id: number
   timestamp: Date
   customer: string
+  /** Presente si la venta fue a fiado (cliente en BD). */
+  customerId?: number | null
   items: { name: string; quantity: number; price: number }[]
   total: number
   paymentMethod: "efectivo" | "tarjeta" | "fiado"
