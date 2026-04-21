@@ -1,11 +1,16 @@
 import { isSameCalendarDay } from "@/lib/currency"
-import { startOfWeekMonday, endOfWeekSunday } from "@/lib/sales-period"
+import { startOfWeekMonday, endOfWeekSunday, startOfRollingWeek, endOfRollingWeek } from "@/lib/sales-period"
 import type { SaleRecord } from "@/lib/mock-data"
 import type { ExpenseEntry, AbonoEntry } from "@/lib/business-context"
 import { aggregateProfitForSales } from "@/lib/sale-profit"
 import type { CatalogProduct } from "@/lib/sale-profit"
 
-export type ReportPeriodUi = "diario" | "semanal" | "mensual" | "anual"
+export type ReportPeriodUi =
+  | "diario"
+  | "semanal"
+  | "mensual"
+  | "anual"
+  | "rango"
 
 export type ReportChartRow = { label: string; sales: number; expenses: number }
 
@@ -14,7 +19,8 @@ function isPaid(s: SaleRecord): boolean {
 }
 
 export function getSixMonthWindow(ref: Date): { start: Date; end: Date } {
-  const end = new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59, 999)
+  // Fin = HOY a 23:59:59 (no el último día del mes, para no incluir días futuros)
+  const end = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 23, 59, 59, 999)
   const start = new Date(ref.getFullYear(), ref.getMonth() - 5, 1, 0, 0, 0, 0)
   return { start, end }
 }
@@ -24,6 +30,9 @@ export function filterSalesForReport(
   period: ReportPeriodUi,
   ref: Date
 ): SaleRecord[] {
+  if (period === "rango") {
+    return []
+  }
   if (period === "diario") {
     return sales.filter((s) => isSameCalendarDay(s.timestamp, ref))
   }
@@ -45,6 +54,9 @@ export function filterExpensesForReport(
   period: ReportPeriodUi,
   ref: Date
 ): ExpenseEntry[] {
+  if (period === "rango") {
+    return []
+  }
   if (period === "diario") {
     return expenses.filter((e) => isSameCalendarDay(e.date, ref))
   }
@@ -60,23 +72,14 @@ export function filterExpensesForReport(
   return expenses.filter((e) => e.date.getFullYear() === ref.getFullYear())
 }
 
-/** Misma regla que «Total del mes» en Gastos y la tarjeta de gastos del Dashboard. */
-export function filterExpensesSameCalendarMonthAsRef(
-  expenses: ExpenseEntry[],
-  ref: Date
-): ExpenseEntry[] {
-  const y = ref.getFullYear()
-  const m = ref.getMonth()
-  return expenses.filter(
-    (e) => e.date.getFullYear() === y && e.date.getMonth() === m
-  )
-}
-
 export function filterAbonosForReport(
   abonos: AbonoEntry[],
   period: ReportPeriodUi,
   ref: Date
 ): AbonoEntry[] {
+  if (period === "rango") {
+    return []
+  }
   if (period === "diario") {
     return abonos.filter((a) => isSameCalendarDay(a.timestamp, ref))
   }
@@ -98,6 +101,9 @@ export function buildReportChartRows(
   period: ReportPeriodUi,
   ref: Date
 ): ReportChartRow[] {
+  if (period === "rango") {
+    return []
+  }
   const filteredSales = filterSalesForReport(sales, period, ref)
   const filteredExpenses = filterExpensesForReport(expenses, period, ref)
 
@@ -180,8 +186,22 @@ export function buildReportChartRows(
 
 export function formatReportPeriodCaption(
   period: ReportPeriodUi,
-  ref: Date
+  ref: Date,
+  range?: { start: Date; end: Date }
 ): string {
+  if (period === "rango" && range) {
+    const a = range.start.toLocaleDateString("es-GT", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
+    const b = range.end.toLocaleDateString("es-GT", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    })
+    return `${a} – ${b}`
+  }
   if (period === "diario") {
     return ref.toLocaleDateString("es-GT", {
       weekday: "long",
@@ -191,8 +211,8 @@ export function formatReportPeriodCaption(
     })
   }
   if (period === "semanal") {
-    const a = startOfWeekMonday(ref)
-    const b = endOfWeekSunday(ref)
+    const a = startOfRollingWeek(ref)
+    const b = endOfRollingWeek(ref)
     return `${a.toLocaleDateString("es-GT", { day: "numeric", month: "short" })} – ${b.toLocaleDateString("es-GT", { day: "numeric", month: "short", year: "numeric" })}`
   }
   if (period === "mensual") {
@@ -212,6 +232,8 @@ export function reportPeriodTitle(period: ReportPeriodUi): string {
       return "Mensual (6 meses)"
     case "anual":
       return "Anual"
+    case "rango":
+      return "Por rango de fechas"
     default:
       return period
   }
@@ -243,10 +265,7 @@ export function buildReportSummary(
   const fiadoSales = filteredSales.filter((s) => s.paymentMethod === "fiado")
   const agg = aggregateProfitForSales(paid, catalog)
   const fa = filterAbonosForReport(abonos, period, ref)
-  const feForKpiTotal =
-    period === "mensual" || period === "anual"
-      ? filterExpensesForReport(expenses, period, ref)
-      : filterExpensesSameCalendarMonthAsRef(expenses, ref)
+  const feForKpiTotal = filterExpensesForReport(expenses, period, ref)
   const totalGastos = feForKpiTotal.reduce((a, e) => a + e.amount, 0)
   const totalAbonos = fa.reduce((a, x) => a + x.amount, 0)
   const totalFiado = fiadoSales.reduce((a, s) => a + s.total, 0)

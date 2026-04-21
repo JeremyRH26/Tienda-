@@ -19,6 +19,16 @@ export function endOfWeekSunday(ref: Date): Date {
   return end
 }
 
+/** Semana rodante: desde hace 6 días a las 00:00 hasta hoy a las 23:59:59. */
+export function startOfRollingWeek(ref: Date): Date {
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - 6, 0, 0, 0, 0)
+  return d
+}
+
+export function endOfRollingWeek(ref: Date): Date {
+  return new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 23, 59, 59, 999)
+}
+
 /** Filtra ventas por día natural, semana (lun–dom), mes o año del calendario de `ref`. */
 export function filterSalesByPeriod<T extends { timestamp: Date }>(
   sales: T[],

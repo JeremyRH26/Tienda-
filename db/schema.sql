@@ -145,7 +145,7 @@ CREATE TABLE expense_category (
 CREATE TABLE expense (
   id               int PRIMARY KEY,
   category_id      BIGINT NOT NULL REFERENCES expense_category (id),
-  expense_date     DATE NOT NULL,
+  expense_date     DATETIME NOT NULL,
   amount           NUMERIC(14, 4) NOT NULL CHECK (amount > 0),
   payment_method   VARCHAR(20) NOT NULL
     CHECK (payment_method IN ('cash', 'transfer')),
