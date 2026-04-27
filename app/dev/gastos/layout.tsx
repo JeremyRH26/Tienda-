@@ -11,7 +11,7 @@ export default function DevGastosLayout({
   }
 
   const apiHint =
-    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080 (por defecto)"
+    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api (por defecto)"
 
   return (
     <div className="min-h-screen bg-background">

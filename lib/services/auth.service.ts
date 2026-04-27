@@ -13,7 +13,7 @@ const mod: Record<string, string> = {
 
 export async function login(username: string, password: string): Promise<AuthUser> {
   const res = await fetch(
-    `${(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080")}/api/auth/login`,
+    `${(process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api")}/auth/login`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
