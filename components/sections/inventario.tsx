@@ -103,6 +103,9 @@ export function Inventario() {
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [editImageFile, setEditImageFile] = useState<File | null>(null)
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
   const [newProduct, setNewProduct] = useState({
     name: "",
     categoryId: "",
@@ -132,6 +135,14 @@ export function Inventario() {
     setImagePreview(null)
     setImageFile(null)
   }, [imagePreview])
+
+  const clearEditImage = useCallback(() => {
+    if (editImagePreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(editImagePreview)
+    }
+    setEditImagePreview(null)
+    setEditImageFile(null)
+  }, [editImagePreview])
 
   const loadInventory = useCallback(async () => {
     setLoading(true)
@@ -267,6 +278,7 @@ export function Inventario() {
   }
 
   const openProductEdit = (p: ProductRow) => {
+    clearEditImage()
     setEditingProduct(p)
     setEditProductForm({
       name: p.name,
@@ -278,6 +290,7 @@ export function Inventario() {
       supplierId:
         p.supplierId != null ? String(p.supplierId) : SUPPLIER_NONE,
     })
+    setEditImagePreview(p.image)
   }
 
   const saveProductEdit = async () => {
@@ -306,6 +319,9 @@ export function Inventario() {
         supplierId,
         status: editingProduct.status,
       })
+      if (editImageFile) {
+        await uploadInventoryProductImage(id, editImageFile)
+      }
       if (minStock !== oldMin) {
         await setInventoryMinStock(id, minStock)
       }
@@ -316,11 +332,22 @@ export function Inventario() {
       await loadInventory()
       toast.success("Producto actualizado.")
       setEditingProduct(null)
+      clearEditImage()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "No se pudo guardar el producto.")
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleEditImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (editImagePreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(editImagePreview)
+    }
+    setEditImageFile(file)
+    setEditImagePreview(URL.createObjectURL(file))
   }
 
   const calculateMargin = (cost: string, sale: string) => {
@@ -854,13 +881,61 @@ export function Inventario() {
       </Card>
       </div>
 
-      <Dialog open={editingProduct !== null} onOpenChange={(open) => !open && setEditingProduct(null)}>
+      <Dialog
+        open={editingProduct !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingProduct(null)
+            clearEditImage()
+          }
+        }}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Editar producto</DialogTitle>
             <DialogDescription>Actualiza precios, stock y datos del producto.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Imagen del Producto</label>
+              <div className="flex items-center gap-4">
+                <div
+                  className="relative flex h-24 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50 transition-colors hover:border-primary/50 hover:bg-muted"
+                  onClick={() => editFileInputRef.current?.click()}
+                >
+                  {editImagePreview ? (
+                    <>
+                      <img src={editImagePreview} alt="Preview" className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          clearEditImage()
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </>
+                  ) : (
+                    <ImagePlus className="h-8 w-8 text-muted-foreground/50" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground">
+                    Haz clic para cambiar la imagen del producto
+                  </p>
+                  <p className="text-xs text-muted-foreground">PNG, JPG hasta 5MB</p>
+                </div>
+                <input
+                  ref={editFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleEditImageUpload}
+                />
+              </div>
+            </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Nombre</label>
               <Input

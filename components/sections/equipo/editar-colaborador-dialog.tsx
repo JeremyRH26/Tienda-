@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import { Eye, EyeOff, Plus } from "lucide-react";
 
 type FormState = {
   fullName: string;
@@ -66,12 +66,15 @@ export function EditarColaboradorDialog({
   const queryClient = useQueryClient();
   const [fields, setFields] = useState<FormState | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (employee) {
       setFields(formFromEmployee(employee));
+      setShowPassword(false);
     } else {
       setFields(null);
+      setShowPassword(false);
     }
   }, [employee]);
 
@@ -159,13 +162,29 @@ export function EditarColaboradorDialog({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Contraseña</label>
-              <Input
-                type="password"
-                value={fields.password}
-                onChange={(e) => patch({ password: e.target.value })}
-                className="h-12"
-                autoComplete="new-password"
-              />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={fields.password}
+                  onChange={(e) => patch({ password: e.target.value })}
+                  className="h-12 pr-12"
+                  autoComplete="new-password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Teléfono</label>

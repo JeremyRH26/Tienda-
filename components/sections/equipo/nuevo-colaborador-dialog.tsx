@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { KeyRound, Plus, UserPlus } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Plus, UserPlus } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -55,10 +55,12 @@ export function NuevoColaboradorDialog({
   const queryClient = useQueryClient();
   const [fields, setFields] = useState(emptyFields);
   const [saving, setSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setFields(emptyFields);
+      setShowPassword(false);
     }
   }, [open]);
 
@@ -148,14 +150,30 @@ export function NuevoColaboradorDialog({
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Contraseña</label>
-            <Input
-              type="password"
-              value={fields.password}
-              onChange={(e) => patch({ password: e.target.value })}
-              className="h-12"
-              autoComplete="new-password"
-              placeholder="Contraseña de acceso"
-            />
+            <div className="relative">
+              <Input
+                type={showPassword ? "text" : "password"}
+                value={fields.password}
+                onChange={(e) => patch({ password: e.target.value })}
+                className="h-12 pr-12"
+                autoComplete="new-password"
+                placeholder="Contraseña de acceso"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1/2 h-9 w-9 -translate-y-1/2"
+                onClick={() => setShowPassword((prev) => !prev)}
+                aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Teléfono</label>

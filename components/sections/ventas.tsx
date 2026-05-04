@@ -405,6 +405,22 @@ export function Ventas() {
     )
   }
 
+  const updateQuantityManual = (productId: number, rawValue: string) => {
+    const parsed = Number.parseInt(rawValue, 10)
+    const requestedQty = Number.isFinite(parsed) ? parsed : 0
+    const cap = maxQtyForProduct(productId)
+    const nextQty = Math.min(Math.max(requestedQty, 0), cap)
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.product.id === productId
+            ? { ...item, quantity: nextQty }
+            : item,
+        )
+        .filter((item) => item.quantity > 0),
+    )
+  }
+
   const removeFromCart = (productId: number) => {
     setCart((prev) => prev.filter((item) => item.product.id !== productId))
   }
@@ -689,9 +705,17 @@ export function Ventas() {
                   >
                     <Minus className="h-3 w-3" />
                   </Button>
-                  <span className="w-6 text-center text-sm font-medium sm:w-8">
-                    {item.quantity}
-                  </span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={maxQtyForProduct(item.product.id)}
+                    value={item.quantity}
+                    onChange={(e) =>
+                      updateQuantityManual(item.product.id, e.target.value)
+                    }
+                    className="h-8 w-16 px-2 text-center text-sm"
+                    aria-label={`Cantidad de ${item.product.name}`}
+                  />
                   <Button
                     variant="outline"
                     size="icon"
