@@ -124,6 +124,52 @@ interface CartItem {
   quantity: number
 }
 
+type QuantityEditorProps = {
+  quantity: number
+  max: number
+  productName: string
+  onCommit: (quantity: number) => void
+}
+
+function QuantityEditor({ quantity, max, productName, onCommit }: QuantityEditorProps) {
+  const [draft, setDraft] = useState(String(quantity))
+
+  useEffect(() => {
+    setDraft(String(quantity))
+  }, [quantity])
+
+  const commit = () => {
+    const parsed = Number.parseInt(draft, 10)
+    const requestedQty = Number.isFinite(parsed) ? parsed : 0
+    const nextQty = Math.min(Math.max(requestedQty, 0), max)
+    onCommit(nextQty)
+    setDraft(String(nextQty))
+  }
+
+  return (
+    <Input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={draft}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => {
+        const digitsOnly = e.target.value.replace(/\D+/g, "")
+        setDraft(digitsOnly)
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault()
+          commit()
+        }
+      }}
+      className="h-8 w-16 px-2 text-center text-sm"
+      aria-label={`Cantidad de ${productName}`}
+    />
+  )
+}
+
 /** Líneas de una venta que no coinciden con un producto del catálogo (se conservan al editar). */
 interface CustomCartLine {
   name: string
@@ -405,24 +451,20 @@ export function Ventas() {
     )
   }
 
-  const updateQuantityManual = (productId: number, rawValue: string) => {
-    const parsed = Number.parseInt(rawValue, 10)
-    const requestedQty = Number.isFinite(parsed) ? parsed : 0
-    const cap = maxQtyForProduct(productId)
-    const nextQty = Math.min(Math.max(requestedQty, 0), cap)
+  const removeFromCart = (productId: number) => {
+    setCart((prev) => prev.filter((item) => item.product.id !== productId))
+  }
+
+  const setQuantityDirect = (productId: number, quantity: number) => {
     setCart((prev) =>
       prev
         .map((item) =>
           item.product.id === productId
-            ? { ...item, quantity: nextQty }
+            ? { ...item, quantity }
             : item,
         )
         .filter((item) => item.quantity > 0),
     )
-  }
-
-  const removeFromCart = (productId: number) => {
-    setCart((prev) => prev.filter((item) => item.product.id !== productId))
   }
 
   const total = useMemo(
@@ -705,16 +747,11 @@ export function Ventas() {
                   >
                     <Minus className="h-3 w-3" />
                   </Button>
-                  <Input
-                    type="number"
-                    min={0}
+                  <QuantityEditor
+                    quantity={item.quantity}
                     max={maxQtyForProduct(item.product.id)}
-                    value={item.quantity}
-                    onChange={(e) =>
-                      updateQuantityManual(item.product.id, e.target.value)
-                    }
-                    className="h-8 w-16 px-2 text-center text-sm"
-                    aria-label={`Cantidad de ${item.product.name}`}
+                    productName={item.product.name}
+                    onCommit={(qty) => setQuantityDirect(item.product.id, qty)}
                   />
                   <Button
                     variant="outline"
