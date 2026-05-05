@@ -6,6 +6,8 @@ export type SaleLineProfit = {
   name: string
   quantity: number
   price: number
+  /** URL de imagen del producto si el backend la envió. */
+  imageUrl?: string | null
   unitCost: number | null
   lineCost: number
   lineRevenue: number
@@ -53,6 +55,7 @@ export function saleProfitBreakdown(
       name: item.name,
       quantity: qty,
       price: item.price,
+      imageUrl: item.imageUrl ?? null,
       unitCost,
       lineCost,
       lineRevenue: revenue,

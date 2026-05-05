@@ -353,7 +353,13 @@ export interface SaleRecord {
   customer: string
   /** Presente si la venta fue a fiado (cliente en BD). */
   customerId?: number | null
-  items: { name: string; quantity: number; price: number }[]
+  items: {
+    name: string
+    quantity: number
+    price: number
+    /** Opcional: viene del API; mocks pueden omitirlo y usar el catálogo por nombre. */
+    imageUrl?: string | null
+  }[]
   total: number
   paymentMethod: "efectivo" | "tarjeta" | "fiado"
   employeeId: number

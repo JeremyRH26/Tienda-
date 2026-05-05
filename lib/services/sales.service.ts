@@ -14,6 +14,8 @@ export type SaleLineDto = {
   name: string
   quantity: number
   price: number
+  /** URL pública de la foto del producto (inventario). */
+  imageUrl?: string | null
 }
 
 export type SaleWithLinesDto = {
@@ -64,6 +66,7 @@ export function mapApiSaleToSaleRecord(s: SaleWithLinesDto): SaleRecord {
       name: i.name,
       quantity: i.quantity,
       price: i.price,
+      imageUrl: i.imageUrl ?? null,
     })),
     total: s.totalAmount,
     paymentMethod: mapPaymentMethodFromApi(s.paymentMethod),

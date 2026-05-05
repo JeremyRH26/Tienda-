@@ -1658,25 +1658,50 @@ export function Ventas() {
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Productos</p>
-                    {pb.lines.map((line, index) => (
-                      <div
-                        key={`${line.name}-${index}`}
-                        className="rounded-lg bg-muted/50 p-3 text-sm"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium">{line.name}</p>
-                          <p className="shrink-0 font-medium tabular-nums">
-                            {formatQ(line.lineRevenue)}
-                          </p>
+                    {pb.lines.map((line, index) => {
+                      const lineImage =
+                        (line.imageUrl && line.imageUrl.trim() !== ""
+                          ? line.imageUrl
+                          : null) ??
+                        matchCatalogProductByName(posProducts, line.name)?.image ??
+                        null
+                      return (
+                        <div
+                          key={`${line.name}-${index}`}
+                          className="rounded-lg bg-muted/50 p-3 text-sm"
+                        >
+                          <div className="flex gap-3">
+                            <div className="relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg border bg-muted">
+                              {lineImage ? (
+                                <img
+                                  src={lineImage}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-muted-foreground">
+                                  {line.name.charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className="font-medium leading-snug">{line.name}</p>
+                                <p className="shrink-0 font-medium tabular-nums">
+                                  {formatQ(line.lineRevenue)}
+                                </p>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {formatQ(line.price)} × {line.quantity}
+                              </p>
+                              <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                                Ganancia: {formatQ(line.lineMargin)}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        <p className="text-xs text-muted-foreground">
-                          {formatQ(line.price)} × {line.quantity}
-                        </p>
-                        <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
-                          Ganancia: {formatQ(line.lineMargin)}
-                        </p>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                   <div className="flex items-center justify-between rounded-lg bg-primary/10 p-4">
                     <span className="font-medium">
