@@ -955,12 +955,16 @@ export function Ventas() {
                       )}
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="flex w-full flex-col p-0 sm:max-w-md">
-                    <SheetHeader className="border-b p-4">
-                      <SheetTitle className="flex items-center justify-between text-base">
+                  <SheetContent
+                    side="right"
+                    className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+                    closeClassName="border-0 bg-transparent p-1 shadow-none opacity-100 text-foreground transition-opacity hover:bg-transparent hover:opacity-80 data-[state=open]:bg-transparent [&_svg]:size-[1.125rem] [&_svg]:stroke-[2.25]"
+                  >
+                    <SheetHeader className="border-b p-4 pr-11">
+                      <SheetTitle className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base">
                         <span>Carrito</span>
-                        <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-                          {cartItemCount} items
+                        <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium tabular-nums text-primary-foreground">
+                          {cartItemCount} {cartItemCount === 1 ? "producto" : "productos"}
                         </span>
                       </SheetTitle>
                       <SheetDescription className="sr-only">Tu carrito de compras actual.</SheetDescription>
@@ -1060,10 +1064,10 @@ export function Ventas() {
             {/* Desktop Cart Sidebar */}
             <Card className="hidden w-80 shrink-0 shadow-sm lg:flex lg:w-96 lg:flex-col" style={{ maxHeight: "calc(100vh - 14rem)" }}>
               <CardHeader className="shrink-0 border-b">
-                <CardTitle className="flex items-center justify-between text-base">
+                <CardTitle className="flex flex-wrap items-center gap-x-2 gap-y-1 text-base">
                   <span>Carrito</span>
-                  <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
-                    {cartItemCount} items
+                  <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-medium tabular-nums text-primary-foreground">
+                    {cartItemCount} {cartItemCount === 1 ? "producto" : "productos"}
                   </span>
                 </CardTitle>
               </CardHeader>
@@ -1175,98 +1179,102 @@ export function Ventas() {
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6 sm:gap-4">
             <Card className="shadow-sm">
-              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
-                  <Receipt className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+                  Mov. ventas (periodo)
+                </CardTitle>
+                <Receipt className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="break-words text-lg font-bold tabular-nums sm:text-2xl">
+                  {visibleSales.length}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    Mov. ventas (periodo)
-                  </p>
-                  <p className="text-lg font-bold sm:text-2xl">{visibleSales.length}</p>
-                </div>
+                <p className="text-xs text-muted-foreground">Según periodo y filtros</p>
               </CardContent>
             </Card>
             <Card className="shadow-sm">
-              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
-                  <Banknote className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+                  Ingreso total (periodo)
+                </CardTitle>
+                <Banknote className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="break-words text-lg font-bold tabular-nums text-primary sm:text-2xl">
+                  {formatQ(periodIngresoTotal)}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    Ingreso total (periodo)
-                  </p>
-                  <p className="text-lg font-bold text-primary sm:text-2xl">
-                    {formatQ(periodIngresoTotal)}
-                  </p>
-                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-xs">
-                    Ventas cobradas + abonos del periodo
-                  </p>
-                </div>
+                <p className="text-xs leading-snug text-muted-foreground">
+                  <span className="hidden sm:inline">Ventas cobradas + abonos del periodo</span>
+                  <span className="sm:hidden">Cobrado + abonos del periodo</span>
+                </p>
               </CardContent>
             </Card>
             <Card className="shadow-sm">
-              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted sm:h-12 sm:w-12">
-                  <Package className="h-5 w-5 text-muted-foreground sm:h-6 sm:w-6" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+                  Capital / costo (periodo)
+                </CardTitle>
+                <Package className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="break-words text-lg font-bold tabular-nums text-foreground sm:text-2xl">
+                  {formatQ(periodCapitalTotal)}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    Capital / costo (periodo)
-                  </p>
-                  <p className="text-lg font-bold text-foreground sm:text-2xl">
-                    {formatQ(periodCapitalTotal)}
-                  </p>
-                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-xs">
+                <p className="text-xs leading-snug text-muted-foreground">
+                  <span className="hidden lg:inline">
                     Costo inventario (contado + parte de abonos FIFO)
-                  </p>
-                </div>
+                  </span>
+                  <span className="hidden sm:inline lg:hidden">Costo + abonos</span>
+                  <span className="sm:hidden">Inventario y abonos</span>
+                </p>
               </CardContent>
             </Card>
             <Card className="shadow-sm">
-              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30 sm:h-12 sm:w-12">
-                  <TrendingUp className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+                  Ganancia (periodo)
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="break-words text-lg font-bold tabular-nums text-emerald-600 sm:text-2xl">
+                  {formatQ(periodGananciaTotal)}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    Ganancia (periodo)
-                  </p>
-                  <p className="text-lg font-bold text-emerald-600 sm:text-2xl">
-                    {formatQ(periodGananciaTotal)}
-                  </p>
-                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground sm:text-xs">
-                    Margen ventas cobradas + margen en abonos (FIFO)
-                  </p>
-                </div>
+                <p className="text-xs leading-snug text-muted-foreground">
+                  <span className="hidden lg:inline">
+                    Margen ventas cobradas + margen en abonos
+                  </span>
+                  <span className="hidden sm:inline lg:hidden">Margen cobrado + abonos </span>
+                  <span className="sm:hidden">Margen y abonos </span>
+                </p>
               </CardContent>
             </Card>
             <Card className="shadow-sm">
-              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
-                  <Landmark className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+                  Cobrado ventas (hoy)
+                </CardTitle>
+                <Landmark className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="break-words text-lg font-bold tabular-nums text-primary sm:text-2xl">
+                  {formatQ(recaudadoVentasHoy)}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
-                    Cobrado ventas (hoy)
-                  </p>
-                  <p className="text-lg font-bold text-primary sm:text-2xl">
-                    {formatQ(recaudadoVentasHoy)}
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground">Efectivo y tarjeta (hoy)</p>
               </CardContent>
             </Card>
             <Card className="shadow-sm">
-              <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30 sm:h-12 sm:w-12">
-                  <Coins className="h-5 w-5 text-emerald-600 sm:h-6 sm:w-6" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+                  Abonos (hoy)
+                </CardTitle>
+                <Coins className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="break-words text-lg font-bold tabular-nums text-emerald-600 sm:text-2xl">
+                  {formatQ(abonosRecibidosHoy)}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs text-muted-foreground sm:text-sm">Abonos (hoy)</p>
-                  <p className="text-lg font-bold text-emerald-600 sm:text-2xl">
-                    {formatQ(abonosRecibidosHoy)}
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground">Abonos recibidos hoy</p>
               </CardContent>
             </Card>
           </div>

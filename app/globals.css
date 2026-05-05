@@ -140,3 +140,16 @@
 .animate-module-enter {
   animation: module-enter 560ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/**
+ * Evita el botón nativo de “mostrar contraseña” del navegador (p. ej. Edge)
+ * junto al toggle personalizado del formulario de login.
+ */
+@layer utilities {
+  .no-native-password-toggle::-ms-reveal,
+  .no-native-password-toggle::-ms-clear {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}

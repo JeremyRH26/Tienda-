@@ -68,7 +68,7 @@ export function LoginScreen() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 pr-11"
+                  className="no-native-password-toggle h-11 pr-11"
                   required
                 />
                 <Button

@@ -10,6 +10,7 @@ import {
   Plus,
   Package,
   AlertTriangle,
+  DollarSign,
   Filter,
   ImagePlus,
   X,
@@ -208,7 +209,7 @@ export function Inventario() {
 
   const lowStockCount = products.filter((p) => p.stock < p.minStock).length
   const totalProducts = products.length
-  const totalValue = products.reduce((acc, p) => acc + p.salePrice * p.stock, 0)
+  const totalValue = products.reduce((acc, p) => acc + p.costPrice * p.stock, 0)
   const totalMargin = products.reduce((acc, p) => acc + (p.salePrice - p.costPrice) * p.stock, 0)
   const initialLoading = loading && products.length === 0
 
@@ -656,8 +657,13 @@ export function Inventario() {
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, idx) => (
               <Card key={`inv-skeleton-stat-${idx}`} className="shadow-sm">
-                <CardContent className="p-4 sm:p-6">
-                  <div className="h-16 animate-pulse rounded-md bg-muted" />
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <div className="h-4 max-w-[65%] flex-1 animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-4 shrink-0 animate-pulse rounded bg-muted" />
+                </CardHeader>
+                <CardContent className="space-y-2 pt-0">
+                  <div className="h-8 max-w-[85%] animate-pulse rounded bg-muted" />
+                  <div className="h-3 w-full animate-pulse rounded bg-muted/80" />
                 </CardContent>
               </Card>
             ))}
@@ -690,50 +696,72 @@ export function Inventario() {
           initialLoading ? "pointer-events-none translate-y-1 opacity-0" : "translate-y-0 opacity-100"
         }`}
       >
-      {/* Stats Cards */}
+      {/* Stats Cards — mismo patrón que el dashboard (cabecera + icono compacto, valor debajo) */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Card className="shadow-sm">
-          <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
-              <Package className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Total Productos</p>
-              <p className="text-lg font-bold sm:text-2xl">{totalProducts}</p>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+              Total productos
+            </CardTitle>
+            <Package className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="break-words text-lg font-bold tabular-nums sm:text-2xl">{totalProducts}</div>
+            <p className="text-xs text-muted-foreground">Activos en inventario</p>
           </CardContent>
         </Card>
         <Card className="shadow-sm">
-          <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30 sm:h-12 sm:w-12">
-              <AlertTriangle className="h-5 w-5 text-amber-600 sm:h-6 sm:w-6" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+              Stock bajo
+            </CardTitle>
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="break-words text-lg font-bold tabular-nums text-amber-600 sm:text-2xl">
+              {lowStockCount}
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Stock Bajo</p>
-              <p className="text-lg font-bold text-amber-600 sm:text-2xl">{lowStockCount}</p>
-            </div>
+            <p className="text-xs text-muted-foreground">Por debajo del mínimo</p>
           </CardContent>
         </Card>
         <Card className="shadow-sm">
-          <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
-              <Package className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+              Valor inventario
+            </CardTitle>
+            <DollarSign className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div
+              className="break-words text-lg font-bold tabular-nums sm:text-2xl"
+              title={formatQ(totalValue)}
+            >
+              {formatQ(totalValue)}
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Valor Inventario</p>
-              <p className="text-lg font-bold sm:text-2xl">{formatQ(totalValue)}</p>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              <span className="hidden sm:inline">Capital</span>
+              <span className="sm:hidden">Capital</span>
+            </p>
           </CardContent>
         </Card>
         <Card className="shadow-sm">
-          <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-6">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 sm:h-12 sm:w-12">
-              <TrendingUp className="h-5 w-5 text-primary sm:h-6 sm:w-6" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="min-w-0 text-xs font-medium leading-snug text-muted-foreground sm:text-sm">
+              Ganancia potencial
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div
+              className="break-words text-lg font-bold tabular-nums text-primary sm:text-2xl"
+              title={formatQ(totalMargin)}
+            >
+              {formatQ(totalMargin)}
             </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs text-muted-foreground sm:text-sm">Ganancia Potencial</p>
-              <p className="text-lg font-bold text-primary sm:text-2xl">{formatQ(totalMargin)}</p>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              <span className="hidden sm:inline">Utilidades</span>
+              <span className="sm:hidden">Utilidades</span>
+            </p>
           </CardContent>
         </Card>
       </div>
